@@ -88,7 +88,7 @@ export class Gatekeeper {
     //Merge provided options with defaults
     this.options = Object.assign({}, this.options, options);
 
-    console.log(this.options)
+    console.log(this.options);
 
     //hash the private key
     this.hashedPrivateKey = generateSignature(privateKey);
@@ -194,7 +194,6 @@ export class Gatekeeper {
     }
   }
 
-  //DEAL WITH processURL not having what it needs to parse and erroring out
   public processURL() {
     let processURL = new ProcessURL(this.REQUEST);
     let result: z.infer<typeof processURLResultObject> = processURL.parseURL();
@@ -312,9 +311,7 @@ export class Gatekeeper {
 
   /**
    * Generate Token Object
-   */
-
-  //CONTINUE FROM HERE
+  */
   private generateCookieObjects() {
     let tokenDatestamp = new Date().getTime();
     let signatureGenerated: string = "";
@@ -530,7 +527,7 @@ export class Gatekeeper {
 
   /**
    * Validate request using signature and/or Crowdhandler API when required
-   */
+  */
   private async validateRequestHybridMode() {
     let signatures = [];
     let tokens = [];
@@ -675,13 +672,9 @@ export class Gatekeeper {
             token = this.sessionStatus.result.token;
             this.getToken(token);
           }
-          //WE NEED TO ADD A MEANS TO GETTOKEN AND GETSIGNATURE BY PASSING API DATA
         }
       } catch (error: any) {
         logger(this.options.debug, "error", error);
-        //DO WE NEED THESE?
-        //result.promoted = false;
-        //return result;
       }
     }
 
