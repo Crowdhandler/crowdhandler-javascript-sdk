@@ -1,0 +1,10 @@
+/** @type {import('ts-jest/dist/types').InitialOptionsTsJest} */
+module.exports = {
+  preset: "ts-jest",
+  testEnvironment: "node",
+  testTimeout: 10000,
+  transform: {
+    "^.+\\.jsx?$": "babel-jest",
+  },
+  transformIgnorePatterns: ["node_modules/(?!variables/.*)"],
+};
