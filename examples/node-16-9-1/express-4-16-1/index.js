@@ -10,7 +10,7 @@ router.get("*", async function (req, res, next) {
 
   //Initalize the client
   let public_client = new crowdhandler.PublicClient(
-    "https://api-dev.crowdhandler.com",
+    "https://api.crowdhandler.com",
     publicKey,
   );
 
