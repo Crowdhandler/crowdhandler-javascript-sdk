@@ -90,8 +90,14 @@ export class Gatekeeper {
 
     console.log(this.options);
 
-    //hash the private key
-    this.hashedPrivateKey = generateSignature(privateKey);
+    //hash the private key if mode is set to hybrid
+    if (this.options.mode === "hybrid") {
+      try {
+         this.hashedPrivateKey = generateSignature(privateKey);
+      } catch (error: any) {
+        logger(this.options.debug, "Error generating private key hash: ",  error);
+      }
+    }
 
     this.host = this.REQUEST.getHost();
     this.path = this.REQUEST.getPath();
@@ -311,7 +317,7 @@ export class Gatekeeper {
 
   /**
    * Generate Token Object
-  */
+   */
   private generateCookieObjects() {
     let tokenDatestamp = new Date().getTime();
     let signatureGenerated: string = "";
@@ -527,7 +533,7 @@ export class Gatekeeper {
 
   /**
    * Validate request using signature and/or Crowdhandler API when required
-  */
+   */
   private async validateRequestHybridMode() {
     let signatures = [];
     let tokens = [];

@@ -1,7 +1,12 @@
 {
-  "name": "@crowdhandler/crowdhandler-sdk",
-  "version": "0.0.1-beta.0",
+  "name": "crowdhandler-sdk",
+  "version": "0.0.1-beta.4",
   "description": "",
+  "homepage": "https://github.com/Crowdhandler/crowdhandler-javascript-sdk#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Crowdhandler/crowdhandler-javascript-sdk"
+  },
   "files": [
     "dist/**"
   ],
