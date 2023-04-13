@@ -30,7 +30,7 @@ import { Resource } from "../client/resource";
 
 export class Gatekeeper {
   public PublicClient;
-  private readonly WAIT_URL: string = "https://wait-dev.crowdhandler.com";
+  private readonly WAIT_URL: string = "https://wait.crowdhandler.com";
   private readonly COOKIE_NAME: string = "crowdhandler";
   public readonly REQUEST: any;
   private ignore: RegExp =
