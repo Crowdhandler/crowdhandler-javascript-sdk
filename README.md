@@ -10,8 +10,10 @@ INSTRUCTIONS HERE
 Instantiate a Public API client
 --------------------------------
 
-    const public_clent = new crowdhandler.PublicClient(your_public_key, timeout, debugMode)
-    
+    const public_clent = new crowdhandler.PublicClient(api_endpoint, your_public_key, timeout, debugMode)
+
+**api_endpoint**: string (unless specified you should set this to "https://api.crowdhandler.com")
+
 **your_public_key**: string
 
 **timeout**: integer (optional) (default = 5000ms)
