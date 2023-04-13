@@ -197,7 +197,7 @@ More information
 
 #### Knowledge base and API
 
-https://support.crowdhandler.com
+https://www.crowdhandler.com/support
 
 #### email
 
