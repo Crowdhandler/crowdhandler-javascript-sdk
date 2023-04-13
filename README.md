@@ -2,10 +2,12 @@ CrowdHandler JS SDK
 ====================
 JS SDK for interacting with CrowdHandler Public and Private APIs. Extensive functionality for checking and queuing users
 
-Install
--------
+Install and Require
+-------------------
 
-INSTRUCTIONS HERE
+    npm i crowdhandler-sdk
+    
+    const crowdhandler = require("crowdhandler-sdk")
 
 Instantiate a Public API client
 --------------------------------
