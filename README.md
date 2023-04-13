@@ -143,7 +143,7 @@ If you want you can pass your own regular expression. This will *override* the e
 Request Validation
 -------------------------
     
-    const ch_status = ch_gatekeeper->validateRequest();
+    const ch_status = ch_gatekeeper.validateRequest();
     
 This is the heart of the class. It looks at the user's request, checks in with the API (or their signature if options.mode = "hybrid") and retrieves a result that indicates whether the user should be granted access or be sent to a waiting room. 
 
