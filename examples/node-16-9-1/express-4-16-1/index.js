@@ -10,13 +10,11 @@ router.get("*", async function (req, res, next) {
 
   //Initalize the client
   let public_client = new crowdhandler.PublicClient(
-    "https://api.crowdhandler.com",
     publicKey,
   );
 
   //Initalize the request context
   let ch_context = new crowdhandler.RequestContext(req, res);
-
 
   //Initalize the gatekeeper
   let ch_gatekeeper = new crowdhandler.Gatekeeper(
