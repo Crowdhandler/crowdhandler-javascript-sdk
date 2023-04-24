@@ -21,7 +21,6 @@ export class Signature {
   private cookie: z.infer<typeof CookieObject> | undefined;
   private specialParameters: z.infer<typeof SpecialParametersObject>;
   private hashCandidates: string[] = [];
-  //GET AN INTERFACE IN
   private activeCookie: any;
   private token: string | undefined;
   private requested: string | undefined;

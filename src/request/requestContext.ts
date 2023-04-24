@@ -1,77 +1,43 @@
-//var httpMocks = require("node-mocks-http");
-import { CookieObject } from "../common/types";
-import { object, z } from "zod";
+import { CloudFrontRequestEvent, CloudFrontResponseEvent } from "aws-lambda";
 
+import { NonLambdaHandler } from "./nonLambdaHandler";
+import { LambdaRequestHandler } from "./lambdaRequestHandler";
+import { LambdaResponseHandler } from "./lambdaResponseHandler";
+
+interface RequestContextParams {
+  lambdaEvent?: any;
+  request?: any;
+  response?: any;
+}
+
+//Create a base class that will act as a switch depending on the environment
 export class RequestContext {
-  private request: any;
-  private response: any;
+  //constructor(event: CloudFrontEvent, req?: any, res?: any) {
+  constructor(params: RequestContextParams) {
+    if (params.lambdaEvent) {
+      //Create a switch based on the event type
+      switch (params.lambdaEvent?.Records[0].cf.config.eventType) {
+        case "viewer-request":
+        case "origin-request":
+          //update the event type to be a CloudFrontRequestEvent
+          const requestEvent =
+            params.lambdaEvent as unknown as CloudFrontRequestEvent;
+          return new LambdaRequestHandler(requestEvent.Records[0].cf.request);
+          break;
 
-  constructor(req: any, res?: any) {
-    this.request = req;
-    this.response = res;
-
-    //console.log(this.response);
-  }
-
-  public getHeader(headername: string) {
-    let headerValue = this.request.header(headername);
-
-    if (!headerValue) {
-      return "";
+        case "viewer-response":
+        case "origin-response":
+          //update the event type to be a CloudFrontResponseEvent
+          const responseEvent =
+            params.lambdaEvent as unknown as CloudFrontResponseEvent;
+          return new LambdaResponseHandler(
+            responseEvent.Records[0].cf.request,
+            responseEvent.Records[0].cf.response
+          );
+          break;
+      }
+    } else {
+      return new NonLambdaHandler(params.request, params.response);
     }
-
-    return headerValue;
-  }
-
-  public getCookies() {
-    return this.request.get("cookie");
-  }
-
-  public getHost() {
-    return this.request.get("host");
-  }
-
-  public getProtocol() {
-    return this.request.protocol;
-  }
-
-  public getPath() {
-    return this.request.originalUrl;
-  }
-
-  public getAbsoluteUri() {
-    return (
-      this.request.protocol +
-      "://" +
-      this.request.get("host") +
-      this.request.originalUrl
-    );
-  }
-
-  public getUserHostAddress() {
-    return this.request.ip;
-  }
-
-  public setCookie(value: z.infer<typeof CookieObject>) {
-    const cookieOptions: any = {
-      path: "/",
-      secure: true, // cookie will only be sent over HTTPS
-    };
-    //Append cookie to response header
-    return this.response.setHeader(
-      "Set-Cookie",
-      `crowdhandler=${value}; ${Object.keys(cookieOptions)
-        .map((key) => `${key}=${cookieOptions[key]}`)
-        .join("; ")}`
-    );
-  }
-
-  public redirect(url: string) {
-    this.response.setHeader("Cache-Control", "no-cache, no-store, max-age=0");
-    this.response.setHeader("Pragma", "no-cache");
-    this.response.setHeader("Expires", 0);
-    this.response.setHeader("Location", url);
-    this.response.statusCode = 302;
-    return this.response.end();
   }
 }

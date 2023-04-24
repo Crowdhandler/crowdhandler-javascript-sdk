@@ -1,6 +1,6 @@
 {
   "name": "crowdhandler-sdk",
-  "version": "0.0.1-beta.6",
+  "version": "0.0.2-beta.1",
   "description": "",
   "homepage": "https://github.com/Crowdhandler/crowdhandler-javascript-sdk#readme",
   "repository": {
@@ -28,6 +28,7 @@
     "typescript": "^4.7.4"
   },
   "dependencies": {
+    "@types/aws-lambda": "^8.10.114",
     "axios": "^0.27.2",
     "js-sha256": "^0.9.0",
     "query-string": "^7.1.3",

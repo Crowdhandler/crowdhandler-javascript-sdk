@@ -1,18 +1,16 @@
 import { Client } from "./client";
 
 export class Resource extends Client {
-  path;
-
+  path: string;
   constructor(
-    api_url: string,
     key: string,
     path: string,
-    timeout: number = 5000,
-    debug: boolean = false
+    options: { timeout?: number; debug?: boolean; api_url?: string } = {}
   ) {
-    super(api_url, key, timeout, debug);
+    const { timeout = 5000, debug = false, api_url = "https://api.crowdhandler.com" } =
+      options ?? {};
+    super(api_url, key, options);
     this.path = path;
-    this.debug = debug;
   }
 
   delete(id: string, body: object) {

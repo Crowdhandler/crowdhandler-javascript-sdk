@@ -1,4 +1,3 @@
-import { PublicClient } from "../client/public_client";
 import { ConfigParse } from "./configParse";
 import { ProcessURL } from "../common/processURL";
 import { Signature } from "./signature";
@@ -10,10 +9,10 @@ import { getUserAgent } from "../common/userAgentDiscover";
 import { Timer } from "../common/timer";
 import { ignoredPatternsCheck } from "../common/ignoredPatternsCheck";
 import "../common/types";
-import { TypeOf, z } from "zod";
+import { z } from "zod";
 import {
   GatekeeperOptions,
-  RequestObject,
+  GatekeeperKeyPair,
   RoomMetaObject,
   CookieObject,
   SignatureObject,
@@ -23,10 +22,9 @@ import {
   validateRequestObject,
   httpErrorWrapper,
   SessionStatusWrapper,
+  RecordPerformanceOptions
 } from "../common/types";
 import { generateSignature } from "../common/hash";
-import { RequestContext } from "../request/requestContext";
-import { Resource } from "../client/resource";
 
 export class Gatekeeper {
   public PublicClient;
@@ -46,6 +44,7 @@ export class Gatekeeper {
     trustOnFail: true,
   };
   public activeConfig!: z.infer<typeof RoomMetaObject>;
+  public cookies: Array<string> = [];
   public cookieValue: z.infer<typeof CookieObject> | undefined;
   public simpleCookieValue: string | undefined;
   //Signature can come in the form of a simple string or as an object /w meta data.
@@ -56,7 +55,6 @@ export class Gatekeeper {
   private complexSignature: z.infer<typeof SignatureObject> = [];
   public token!: string;
   public responseID: string | undefined;
-  private tokenObject: any;
   timer: Timer;
   public host!: string;
   public path!: string;
@@ -77,25 +75,36 @@ export class Gatekeeper {
   constructor(
     PublicClient: any,
     request: any,
-    publickey: string,
-    privateKey: string,
+    keyPair: z.infer<typeof GatekeeperKeyPair>,
     options: z.infer<typeof GatekeeperOptions>
   ) {
     this.PublicClient = PublicClient;
     this.REQUEST = request;
-    this.publicKey = publickey;
-    this.privateKey = privateKey;
+    this.publicKey = keyPair.publicKey;
+    this.privateKey = keyPair.privateKey;
     //Merge provided options with defaults
     this.options = Object.assign({}, this.options, options);
 
-    console.log(this.options);
+    //Hash the private key if mode is set to hybrid
+    //Check if privateKey is provided when mode is set to "hybrid"
+    if (
+      this.options.mode === "hybrid" &&
+      (this.privateKey === undefined || this.privateKey === "")
+    ) {
+      throw new Error(
+        "privateKey must be provided when mode is set to 'hybrid'"
+      );
+    }
 
-    //hash the private key if mode is set to hybrid
-    if (this.options.mode === "hybrid") {
+    if (this.options.mode === "hybrid" && this.privateKey !== undefined) {
       try {
-         this.hashedPrivateKey = generateSignature(privateKey);
+        this.hashedPrivateKey = generateSignature(this.privateKey);
       } catch (error: any) {
-        logger(this.options.debug, "Error generating private key hash: ",  error);
+        logger(
+          this.options.debug,
+          "Error generating private key hash: ",
+          error
+        );
       }
     }
 
@@ -132,6 +141,11 @@ export class Gatekeeper {
   //Set the user agent using your own method if you're not happy with the default
   public overrideUserAgent(agent: string) {
     this.agent = agent;
+  }
+
+  //Set the cookie using your own method if you're not happy with the default
+  public overrideCookie(cookie: Array<string>) {
+    this.cookies = cookie;
   }
 
   /* If you have your own regular expression for urls to ignore set it here
@@ -290,7 +304,7 @@ export class Gatekeeper {
    * Redirect user to waiting room if not promoted
    */
   public redirectIfNotPromoted() {
-    this.REQUEST.redirect(this.getRedirectUrl());
+    return this.REQUEST.redirect(this.getRedirectUrl());
   }
 
   public redirectToCleanUrl(targetURL: string) {
@@ -348,12 +362,19 @@ export class Gatekeeper {
     this.cookieTokenObject = tokenObject;
   }
 
-  private getCookie(name: string) {
-    let cookie = this.REQUEST.getCookies(this.COOKIE_NAME);
-    //extract crowdhandler cookie value if it exists
-    if (cookie && this.options.mode === "hybrid") {
+  private getCookie() {
+    //get cookies from request or override
+    let cookies;
+    if (this.cookies.length === 0) {
+      cookies = this.REQUEST.getCookies();
+    } else {
+      cookies = this.cookies;
+    }
+
+    //extract crowdhandler cookie value if it exists depending on mode
+    if (cookies && this.options.mode === "hybrid") {
       try {
-        let cookieArray = cookie.split(";");
+        let cookieArray = cookies.split(";");
         for (let i = 0; i < cookieArray.length; i++) {
           let cookie = cookieArray[i].split("=");
           if (cookie[0] === this.COOKIE_NAME) {
@@ -362,17 +383,15 @@ export class Gatekeeper {
             let processedCookie: z.infer<typeof CookieObject> | undefined =
               JSON.parse(decodedCookie);
             this.cookieValue = processedCookie;
-
-            //this.cookieValue = processedCookie;
           }
         }
       } catch (error: any) {
         logger(this.options.debug, "error", error);
         return;
       }
-    } else if (cookie && this.options.mode === "full") {
+    } else if (cookies && this.options.mode === "full") {
       try {
-        let cookieArray = cookie.split(";");
+        let cookieArray = cookies.split(";");
         for (let i = 0; i < cookieArray.length; i++) {
           let cookie = cookieArray[i].split("=");
           if (cookie[0] === this.COOKIE_NAME) {
@@ -397,32 +416,43 @@ export class Gatekeeper {
    * Set CrowdHandler session cookie
    */
   public setCookie(value: string) {
-    this.REQUEST.setCookie(value),
-      {
+    this.REQUEST.setCookie(value);
+    //Neccessary?
+    /*{
         secure: true,
         sameSite: "strict",
         path: "/",
         domain: this.host,
-      };
+      };*/
   }
 
   /**
    * Send current page performance to CrowdHandler
-   * @param integer $httpCode HTTP Response code
-   * @param float $sample Sample rate (0.0 - 1.0). Record 20% of requests by default.
+   * @param statusCode HTTP Response code (optional, defaults to 200)
+   * @param sample Sample rate (0.0 - 1.0). Record 20% of requests by default (optional, defaults to 0.2)
+   * @param overrideElapsed Override elapsed time (optional)
    */
-  public recordPerformance(statusCode?: number, sample: number = 0.2) {
-    let lottery = Math.random();
-
-    if (!this.responseID || lottery < sample) {
+  public recordPerformance(options: z.infer<typeof RecordPerformanceOptions>) {
+    const validatedOptions = RecordPerformanceOptions.parse(options);
+  
+    const {
+      statusCode,
+      sample,
+      overrideElapsed,
+      responseID,
+    } = validatedOptions;
+  
+    const lottery = Math.random();
+    const currentResponseID = responseID || this.responseID;
+  
+    if (!currentResponseID || lottery >= sample) {
       return;
     }
-
-    let elapsed = this.timer.elapsed();
-
-    //No need to wait for this to complete. It's a throwaway request.
-    this.PublicClient.responses().put(this.responseID, {
-      //Will default to 200 if not provided
+  
+    const elapsed = overrideElapsed !== undefined ? overrideElapsed : this.timer.elapsed();
+  
+    // No need to wait for this to complete. It's a throwaway request.
+    this.PublicClient.responses().put(currentResponseID, {
       httpCode: statusCode,
       time: elapsed,
     });
@@ -453,6 +483,7 @@ export class Gatekeeper {
       stripParams: false,
       setCookie: false,
       cookieValue: "",
+      responseID: "",
       slug: "",
       targetURL: "",
     };
@@ -474,7 +505,7 @@ export class Gatekeeper {
 
     result.targetURL = this.targetURL;
 
-    this.getCookie(this.COOKIE_NAME);
+    this.getCookie();
 
     //We need to have a simple version of the cookie for full mode
     this.getToken(this.specialParameters.chID, this.cookieValue);
@@ -520,7 +551,7 @@ export class Gatekeeper {
       }
 
       if (this.sessionStatus.result.responseID) {
-        this.responseID = this.sessionStatus.result.responseID;
+        result.responseID = this.sessionStatus.result.responseID;
       }
 
       if (this.specialParameters.chRequested) {
@@ -565,7 +596,7 @@ export class Gatekeeper {
     this.processURL();
     result.targetURL = this.targetURL;
 
-    this.getCookie(this.COOKIE_NAME);
+    this.getCookie();
 
     await this.getConfig();
 
@@ -598,7 +629,7 @@ export class Gatekeeper {
     }
 
     //Attempt to retrieve crowdhandler cookie
-    this.getCookie(this.COOKIE_NAME);
+    this.getCookie();
 
     logger(this.options.debug, "info", "Cookie: " + this.cookieValue);
 
