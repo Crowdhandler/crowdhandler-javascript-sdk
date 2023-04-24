@@ -210,6 +210,8 @@ This should be done last, after your application has completed all actions i.e. 
     
 You can override the class inferred performance metrics and provide your own if you don't want to rely on the Gatekeeper class to set them. See Lambda@Edge integration example for a fleshed out implementation approach.
 
+    ch_gatekeeper.recordPerfomance(overrideElapsed: elapsed, responseID: responseID, sample: 1, statusCode: 200)
+
 | Option | Type | Default | Values | Explanation |
 | ------ | ---- | ------- | ------ | ----------- |
 | overrideElapsed | integer | * | Date.now() | Milliseconds elapsed since the Unix epoch. |
@@ -217,17 +219,6 @@ You can override the class inferred performance metrics and provide your own if 
 | sample | number | 0.2 | 0-1 | Percentage of requests to submit for performance recording. |
 | statusCode | integer | 200 | 2xx-5xx | Status code that associated with the request. |
 
-
-**overrideElapsed**: integer - Date.now() (milliseconds elapsed since the Unix epoch)
-
-**responseID**: string
-
-**sample**: number - 0-1 (default 0.2 meaning 20% of requests are sampled)
-
-**statusCode**: 
-
-    ch_gatekeeper.recordPerfomance(overrideElapsed: elapsed, responseID: responseID, sample: 1, statusCode: 200)
-    
 
 Putting it all together
 ----------------------------
