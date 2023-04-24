@@ -12,35 +12,57 @@ Install and Require
 Instantiate a Public API client
 --------------------------------
 
-    const public_clent = new crowdhandler.PublicClient(api_endpoint, your_public_key, timeout, debugMode)
-
-**api_endpoint**: string (unless specified you should set this to "https://api.crowdhandler.com")
+    const public_clent = new crowdhandler.PublicClient (your_public_key, options)
 
 **your_public_key**: string
+    
+**options** : object (optional)
 
-**timeout**: integer (optional) (default = 5000ms)
+| Option | Type | Default | Values | Explanation |
+| ------ | ---- | ------- | ------ | ----------- |
+| api_url | string | https://api.crowdhandler.com | * | API endpoint. |
+| debug | string | false | false/true | Outputs debugging information. |
+| timeout | integer | 5000 | 1 - 30000 | Outbound API communication timeout in milliseconds. | 
 
-**debugMode**: boolean (optional) (default = false)
 
 Instantiate Request Context
 --------------------------------
 
-    const ch_context = new crowdhandler.RequestContext(req, res)
+    const ch_context = new crowdhandler.RequestContext(options)
     
-**req**: object
+| Option | Type | Default | Values | Explanation |
+| ------ | ---- | ------- | ------ | ----------- |
+| request | object | * | * | Node.JS http.IncomingMessage derived request object |
+| response | object | * | * | Node.JS http.ServerResponse derived response object |
+| lambdaEvent | object | * | * | Lambda@Edge compatible event. |
 
-**res**: object
+**Express Framework Instantiation Example.**
+
+   `const ch_context = new crowdhandler.RequestContext(request: req, response: res)`
+   
+**Lambda@Edge Instantiation Example.**
+    
+   `const ch_context = new crowdhandler.RequestContext(lambdaEvent: event)`
 
 Instantiate a new GateKeeper object
 -----------------------------------
 
 The GateKeeper class is a controller for interacting with the user request and the CrowdHandler API and taking appropriate action.
 
-    const ch_gatekeeper = new crowdhandler.Gatekeeper(public_client, ch_context, your_public_key, your_private_key, options)
-    
-**your_public_key**: string
+    const ch_gatekeeper = new crowdhandler.Gatekeeper(public_client, ch_context, key_pair, your_private_key, options)
 
-**your_private_key**: string (required only if options.mode = "**hybrid**")
+**public_client**: Object
+
+**ch_context**: Object
+
+**key_pair**: Object
+
+| Option | Type | Default | Values | Explanation |
+| ------ | ---- | ------- | ------ | ----------- |
+| publicKey | string | * | * | your_public_key |
+| privateKey | string | * | * | your_private_key * |
+
+* Required only if **mode: hybrid** set in options (see options.mode discussion found below)
 
 **options** : object (optional)
 
@@ -130,6 +152,12 @@ By default language is inferred from the accept-language header processed in the
     
 By default user agent is inferred from the user-agent header processed in the RequestContext class. 
 
+#### Override Cookie
+
+    ch_gatekeeper.overrideCookie(cookie: Array<string>)
+    
+Override the cookie supplied in the request context.
+
 #### Override Ignore Pattern
 
     ch_gatekeeper.setIgnoreUrls(regExp: RegExp) 
@@ -154,7 +182,6 @@ Set the cookie
         ch_gatekeeper.setCookie(ch_status.cookieValue)
     }
 
-We automatically set the cookie so that the user carries their token with each request.
 
 Strip CrowdHandler parameters
 -----------------------------
@@ -180,6 +207,26 @@ Record page load performance
 This should be done last, after your application has completed all actions i.e. rendered the page. 
         
     ch_gatekeeper.recordPerfomance()
+    
+You can override the class inferred performance metrics and provide your own if you don't want to rely on the Gatekeeper class to set them. See Lambda@Edge integration example for a fleshed out implementation approach.
+
+| Option | Type | Default | Values | Explanation |
+| ------ | ---- | ------- | ------ | ----------- |
+| overrideElapsed | integer | * | Date.now() | Milliseconds elapsed since the Unix epoch. |
+| responseID | string | * | * | responseID value derived from CrowdHandler /requests/* API response. |
+| sample | number | 0.2 | 0-1 | Percentage of requests to submit for performance recording. |
+| statusCode | integer | 200 | 2xx-5xx | Status code that associated with the request. |
+
+
+**overrideElapsed**: integer - Date.now() (milliseconds elapsed since the Unix epoch)
+
+**responseID**: string
+
+**sample**: number - 0-1 (default 0.2 meaning 20% of requests are sampled)
+
+**statusCode**: 
+
+    ch_gatekeeper.recordPerfomance(overrideElapsed: elapsed, responseID: responseID, sample: 1, statusCode: 200)
     
 
 Putting it all together
