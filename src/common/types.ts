@@ -9,6 +9,11 @@ export const GatekeeperOptions = z.object({
   trustOnFail: z.boolean().optional(),
 });
 
+export const GatekeeperKeyPair = z.object({
+  publicKey: z.string(),
+  privateKey: z.string().optional(),
+});
+
 export const QueryObject = z
   .object({
     "ch-code": z.string().optional(),
@@ -114,4 +119,11 @@ export const SessionStatusWrapper = z.object({
       token: z.string().nullable().optional(),
     })
     .catchall(z.any()),
+});
+
+export const RecordPerformanceOptions = z.object({
+  statusCode: z.number().optional().default(200),
+  sample: z.number().optional().default(0.2),
+  overrideElapsed: z.number().optional(),
+  responseID: z.string().optional(),
 });

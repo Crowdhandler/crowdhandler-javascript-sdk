@@ -3,24 +3,24 @@ import { Resource } from "./resource";
 
 export class PublicClient extends Client {
   constructor(
-    api_url: string,
     key: string,
-    timeout: number = 5000,
-    debug: boolean = false
+    options: { timeout?: number; debug?: boolean; api_url?: string } = {}
   ) {
-    super(api_url, key, timeout, debug);
-    this.debug = debug;
+    const { timeout = 5000, debug = false, api_url = "https://api.crowdhandler.com" } =
+      options ?? {};
+    super(api_url, key, options);
+    console.log(this.timeout, this.debug, this.api_url);
   }
 
   requests() {
-    return new Resource(this.api_url, this.key, "/v1/requests/", this.timeout, this.debug);
+    return new Resource(this.key, "/v1/requests/", { timeout: this.timeout, debug: this.debug, api_url: this.api_url });
   }
 
   responses() {
-    return new Resource(this.api_url, this.key, "/v1/responses/", this.timeout, this.debug);
+    return new Resource(this.key, "/v1/responses/", { timeout: this.timeout, debug: this.debug, api_url: this.api_url });
   }
 
   rooms() {
-    return new Resource(this.api_url, this.key, "/v1/rooms/", this.timeout, this.debug);
+    return new Resource(this.key, "/v1/rooms/", { timeout: this.timeout, debug: this.debug, api_url: this.api_url });
   }
 }
