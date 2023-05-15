@@ -40,6 +40,8 @@ router.use(crowdHandlerMiddleware);
 
 // Route handler for all paths
 router.get("*", (req, res, next) => {
+  //YOUR CODE BELOW THIS COMMENT
+  
   // Render the view and send the HTML
   res.render("index", { title: "hello" }, (err, html) => {
     // Handle any errors during rendering
@@ -47,11 +49,9 @@ router.get("*", (req, res, next) => {
       return next(err);
     }
 
-    //YOUR CODE HERE
     res.send(html);
-    //YOUR CODE HERE
 
-    // If the chGatekeeper instance exists in res.locals, record the performance
+    // Don't forget to log performance data with CrowdHandler. This is used for reporting and the autotune feature.
     if (res.locals.chGatekeeper) {
       res.locals.chGatekeeper.recordPerformance();
     }
