@@ -47,8 +47,9 @@ router.get("*", (req, res, next) => {
       return next(err);
     }
 
-    // Send the rendered HTML to the client
+    //YOUR CODE HERE
     res.send(html);
+    //YOUR CODE HERE
 
     // If the chGatekeeper instance exists in res.locals, record the performance
     if (res.locals.chGatekeeper) {
