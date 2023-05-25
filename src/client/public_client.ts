@@ -9,7 +9,6 @@ export class PublicClient extends Client {
     const { timeout = 5000, debug = false, api_url = "https://api.crowdhandler.com" } =
       options ?? {};
     super(api_url, key, options);
-    console.log(this.timeout, this.debug, this.api_url);
   }
 
   requests() {

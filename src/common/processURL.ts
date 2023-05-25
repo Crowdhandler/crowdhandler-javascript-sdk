@@ -121,7 +121,6 @@ export class ProcessURL {
     this.path = this.path.split("?")[0];
 
     if (processedQueryString) {
-      //console.log(`targetURL has query string: ${this.queryString}`)
       this.targetURL = encodeURIComponent(
         `https://${this.host}${this.path}?${processedQueryString}`
       );

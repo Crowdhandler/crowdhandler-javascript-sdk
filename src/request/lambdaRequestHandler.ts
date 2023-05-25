@@ -38,7 +38,11 @@ export class LambdaRequestHandler {
   }
 
   public getPath() {
-    return this.request.uri;
+    if (!this.request.querystring) {
+      return this.request.uri;
+    } else {
+      return `${this.request.uri}?${this.request.querystring}`;
+    }
   }
 
   public getAbsoluteUri() {

@@ -1,29 +1,29 @@
 import { z } from "zod";
 import {
   SignatureObject,
-  tokenObjectConstructor,
-  tokenObject,
+  TokenObjectConstructor,
+  TokenObject,
 } from "../common/types";
 
 export class GenerateCookieObject {
   private tokenDatestamp: z.infer<
-    typeof tokenObjectConstructor
+    typeof TokenObjectConstructor
   >["tokenDatestamp"];
   private tokenDatestampSignature: z.infer<
-    typeof tokenObjectConstructor
+    typeof TokenObjectConstructor
   >["tokenDatestampSignature"];
   private tokenSignature: z.infer<
-    typeof tokenObjectConstructor
+    typeof TokenObjectConstructor
   >["tokenSignature"];
   private tokenSignatureGenerated: z.infer<
-    typeof tokenObjectConstructor
+    typeof TokenObjectConstructor
   >["tokenSignatureGenerated"];
   private tokenSignatures: z.infer<
-    typeof tokenObjectConstructor
+    typeof TokenObjectConstructor
   >["tokenSignatures"];
-  private tokenValue: z.infer<typeof tokenObjectConstructor>["tokenValue"];
+  private tokenValue: z.infer<typeof TokenObjectConstructor>["tokenValue"];
 
-  constructor(tokenObjectProperties: z.infer<typeof tokenObjectConstructor>) {
+  constructor(tokenObjectProperties: z.infer<typeof TokenObjectConstructor>) {
     this.tokenDatestamp = tokenObjectProperties.tokenDatestamp;
     this.tokenDatestampSignature =
       tokenObjectProperties.tokenDatestampSignature;
@@ -44,7 +44,7 @@ export class GenerateCookieObject {
   }
 
   tokenObject() {
-    let tokenObj: z.infer<typeof tokenObject> = {
+    let tokenObj: z.infer<typeof TokenObject> = {
       token: this.tokenValue,
       touched: this.tokenDatestamp,
       touchedSig: this.tokenDatestampSignature,
