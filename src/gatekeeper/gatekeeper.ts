@@ -17,20 +17,25 @@ import {
   CookieObject,
   SignatureObject,
   SpecialParametersObject,
-  processURLResultObject,
-  tokenObject,
-  validateRequestObject,
-  httpErrorWrapper,
+  TokenObject,
+  ValidateRequestObject,
+  HttpErrorWrapper,
   SessionStatusWrapper,
-  RecordPerformanceOptions
+  RecordPerformanceOptions,
+  SignatureSourceObject,
+  GetTokenOptions,
+  LocalStorageObject,
+  LocalStorageOptions,
+  ProcessURLResultObject,
 } from "../common/types";
 import { generateSignature } from "../common/hash";
 
 export class Gatekeeper {
   public PublicClient;
   private readonly WAIT_URL: string = "https://wait.crowdhandler.com";
-  private readonly COOKIE_NAME: string = "crowdhandler";
+  private readonly STORAGE_NAME: string = "crowdhandler";
   public readonly REQUEST: any;
+  public inWaitingRoom: boolean = false;
   private ignore: RegExp =
     /^((?!.*\?).*(\.(avi|css|eot|gif|ico|jpg|jpeg|js|json|mov|mp4|mpeg|mpg|og[g|v]|pdf|png|svg|ttf|txt|wmv|woff|woff2|xml))$)/;
   private hashedPrivateKey!: string;
@@ -47,9 +52,14 @@ export class Gatekeeper {
   public cookies: Array<string> = [];
   public cookieValue: z.infer<typeof CookieObject> | undefined;
   public simpleCookieValue: string | undefined;
+  public localStorageValue:
+    | z.infer<typeof LocalStorageObject>
+    | null
+    | undefined;
+  public storageKey: string | undefined;
   //Signature can come in the form of a simple string or as an object /w meta data.
   private cookieSignatureObject: z.infer<typeof SignatureObject>[0] | undefined;
-  private cookieTokenObject: z.infer<typeof tokenObject> | undefined;
+  private cookieTokenObject: z.infer<typeof TokenObject> | undefined;
   private signatureType: string | undefined;
   private simpleSignature: string[] = [];
   private complexSignature: z.infer<typeof SignatureObject> = [];
@@ -110,12 +120,23 @@ export class Gatekeeper {
 
     this.host = this.REQUEST.getHost();
     this.path = this.REQUEST.getPath();
-    this.ip = getIP(this.REQUEST);
-    this.lang = getLang(this.REQUEST);
-    this.agent = getUserAgent(this.REQUEST);
+
+    if (this.options.mode === "full" || this.options.mode === "hybrid") {
+      this.ip = getIP(this.REQUEST);
+      this.lang = getLang(this.REQUEST);
+      this.agent = getUserAgent(this.REQUEST);
+    }
 
     //Start the timer
     this.timer = new Timer();
+
+    //If host is wait.crowdhandler.com, wait-dev.crowdhandler.com or path starts with /ch/ then we're in the waiting room
+    if (
+      this.host === "wait.crowdhandler.com" ||
+      this.path.startsWith("/ch/")
+    ) {
+      this.inWaitingRoom = true;
+    }
   }
 
   //Set the host using your own method if you're not happy with the default
@@ -157,7 +178,7 @@ export class Gatekeeper {
 
   /*
    * Fetch the room config feed
-   * Method options are static, cache or edgekv.
+   * @return object
    */
   public async getConfig() {
     let response = await this.PublicClient.rooms().get();
@@ -173,7 +194,18 @@ export class Gatekeeper {
     this.activeConfig = RoomMetaObject.parse(result);
   }
 
-  public async getSessionStatus() {
+  /**
+   * Retrieves the current session status using GET call if a token is available, or POST call otherwise.
+   * @returns {Promise<void>} A Promise that resolves when the method has completed.
+   */
+  public async getSessionStatus(): Promise<void> {
+    const requestConfig = {
+      agent: this.agent,
+      ip: this.ip,
+      lang: this.lang,
+      url: `https://${this.host}${this.path}`,
+    };
+
     if (this.token) {
       logger(
         this.options.debug,
@@ -183,16 +215,14 @@ export class Gatekeeper {
       try {
         this.sessionStatus = await this.PublicClient.requests().get(
           this.token,
-          {
-            agent: this.agent,
-            ip: this.ip,
-            lang: this.lang,
-            url: `https://${this.host}${this.path}`,
-          }
+          requestConfig
         );
       } catch (error: any) {
-        logger(this.options.debug, "error", "Session GET call Failed.");
-        logger(this.options.debug, "error", error);
+        logger(
+          this.options.debug,
+          "error",
+          `Session GET call failed with error: ${error}`
+        );
       }
     } else {
       logger(
@@ -201,89 +231,249 @@ export class Gatekeeper {
         "Token not found, performing a session POST call."
       );
       try {
-        this.sessionStatus = await this.PublicClient.requests().post({
-          agent: this.agent,
-          ip: this.ip,
-          lang: this.lang,
-          url: `https://${this.host}${this.path}`,
-        });
+        this.sessionStatus = await this.PublicClient.requests().post(
+          requestConfig
+        );
       } catch (error: any) {
-        logger(this.options.debug, "error", "Session POST call Failed.");
-        logger(this.options.debug, "error", error);
+        logger(
+          this.options.debug,
+          "error",
+          `Session POST call failed with error: ${error}`
+        );
       }
     }
   }
 
-  public processURL() {
-    let processURL = new ProcessURL(this.REQUEST);
-    let result: z.infer<typeof processURLResultObject> = processURL.parseURL();
-    this.targetURL = result.targetURL;
-    this.specialParameters = result.specialParameters;
+  /**
+   * Processes the URL from the request to extract the target URL and any special parameters.
+   */
+  public processURL(): void {
+    try {
+      const processURLInstance = new ProcessURL(this.REQUEST);
+      const result: z.infer<typeof ProcessURLResultObject> =
+        processURLInstance.parseURL();
+      if (result) {
+        this.targetURL = result.targetURL;
+        this.specialParameters = result.specialParameters;
+      } else {
+        throw new Error("Failed to parse URL.");
+      }
+    } catch (error) {
+      logger(this.options.debug, "error", `Error while processing URL: ${error}`);
+    }
   }
 
+  /**
+   * Extracts the signature from the given signature source.
+   * @param signatureSource - The source from which to extract the signature.
+   */
   public getSignature(
-    chIDSignature?: string,
-    crowdhandlerCookieValue?: object
-  ) {
-    if (chIDSignature) {
-      this.simpleSignature = [chIDSignature];
-      this.signatureType = "simple";
-    } else if (crowdhandlerCookieValue) {
-      try {
-        this.cookieValue = CookieObject.parse(crowdhandlerCookieValue);
+    signatureSource: z.infer<typeof SignatureSourceObject>
+  ): void {
+    try {
+      if (signatureSource.chIDSignature) {
+        // Simple signature case
+        this.simpleSignature = [signatureSource.chIDSignature];
+        this.signatureType = "simple";
+      } else if (signatureSource.crowdhandlerCookieValue) {
+        // Complex signature case
+        this.cookieValue = CookieObject.parse(
+          signatureSource.crowdhandlerCookieValue
+        );
 
+        // Assuming that the last token's signatures are needed
         this.complexSignature =
           this.cookieValue.tokens[
             this.cookieValue.tokens.length - 1
           ].signatures;
         this.signatureType = "complex";
-      } catch (error: any) {
-        logger(this.options.debug, "error", error);
-        return;
       }
+    } catch (error: any) {
+      logger(this.options.debug, "error", `Failed to get signature: ${error}`);
     }
   }
 
-  public getToken(chID?: string, crowdhandlerCookieValue?: object) {
-    const tokenPattern = /^tok.*/; // modified regex pattern to match any string that starts with "tok"
-    //Extract from ch-id query string parameter
-    if (chID && tokenPattern.test(chID)) {
-      this.token = chID;
-      //Extract from complex cookie
+  /**
+   * Retrieves a token based on the provided options or instance variables.
+   * @param options - The options for retrieving the token.
+   */
+  public getToken(options?: z.infer<typeof GetTokenOptions>): void {
+    // Use option values if provided, else fall back to constructor values
+    const chID = options?.chID ?? this.specialParameters.chID;
+    const crowdhandlerCookieValue =
+      options?.crowdhandlerCookieValue ?? this.cookieValue;
+    const localStorageValue =
+      options?.localStorageValue ?? this.localStorageValue;
+    const simpleCookieValue =
+      options?.simpleCookieValue ?? this.simpleCookieValue;
+
+    if (chID) {
+      logger(this.options.debug, "info", "chID parameter found");
+      this.extractTokenFromChID(chID);
     } else if (crowdhandlerCookieValue && this.options.mode === "hybrid") {
-      try {
-        this.cookieValue = CookieObject.parse(crowdhandlerCookieValue);
-        const extractedToken =
-          this.cookieValue.tokens[this.cookieValue.tokens.length - 1].token;
-        if (tokenPattern.test(extractedToken)) {
-          this.token = extractedToken;
-        } else {
-          throw new Error("Invalid token format");
-        }
-      } catch (error: any) {
-        logger(this.options.debug, "error", error);
-        return;
+      logger(this.options.debug, "info", "complex cookie found");
+      this.extractTokenFromComplexCookie(crowdhandlerCookieValue);
+    } else if (simpleCookieValue) {
+      logger(this.options.debug, "info", "simple cookie found");
+      this.extractTokenFromSimpleCookie(simpleCookieValue);
+    } else if (localStorageValue && this.options.mode === "clientside") {
+      logger(this.options.debug, "info", "localstorage found");
+      this.getTokenFromLocalStorage();
+    } else {
+      logger(this.options.debug, "info", "Token not found or invalid format");
+    }
+  }
+
+  /**
+   * Verifies if the given token is valid based on its format.
+   * @param token - The token to be validated.
+   * @returns True if the token is valid, false otherwise.
+   */
+  private isValidToken(token: string): boolean {
+    const tokenPattern = /^tok.*/;
+    return tokenPattern.test(token);
+  }
+
+  /**
+   * Extracts and sets the token from the provided chID if it's valid.
+   * @param chID - The chID to extract the token from.
+   * @throws {Error} When the token format is invalid.
+   */
+  private extractTokenFromChID(chID: string): void {
+    if (!this.isValidToken(chID)) {
+      throw new Error(`Invalid token format: ${chID}`);
+    }
+
+    this.token = chID;
+  }
+
+  /**
+   * Extracts and sets the token from a complex cookie value if it's valid.
+   * @param crowdhandlerCookieValue - The crowdhandler cookie value to extract the token from.
+   * @throws {Error} When the token format is invalid.
+   */
+  private extractTokenFromComplexCookie(
+    crowdhandlerCookieValue: z.infer<typeof CookieObject>
+  ): void {
+    try {
+      this.cookieValue = CookieObject.parse(crowdhandlerCookieValue);
+
+      // Ensure tokens array is not empty
+      if (this.cookieValue.tokens.length === 0) {
+        throw new Error("No tokens found in the cookie value.");
       }
-      //Extract from simple cookie
-    } else if (this.simpleCookieValue && this.options.mode === "full") {
-      try {
-        if (tokenPattern.test(this.simpleCookieValue)) {
-          this.token = this.simpleCookieValue;
-        } else {
-          throw new Error("Invalid token format");
-        }
-      } catch (error: any) {
-        logger(this.options.debug, "error", error);
-        return;
+
+      const extractedToken =
+        this.cookieValue.tokens[this.cookieValue.tokens.length - 1].token;
+
+      if (!this.isValidToken(extractedToken)) {
+        throw new Error(`Invalid token format: ${extractedToken}`);
+      }
+
+      this.token = extractedToken;
+    } catch (error: any) {
+      logger(
+        this.options.debug,
+        "error",
+        `Failed to extract token from complex cookie: ${error}`
+      );
+    }
+  }
+
+  /**
+   * Extracts and sets the token from a simple cookie value if it's valid.
+   * @param simpleCookieValue - The simple cookie value to extract the token from.
+   * @throws {Error} When the token format is invalid.
+   */
+  private extractTokenFromSimpleCookie(simpleCookieValue: string): void {
+    try {
+      if (!this.isValidToken(simpleCookieValue)) {
+        throw new Error(`Invalid token format: ${simpleCookieValue}`);
+      }
+
+      this.token = simpleCookieValue;
+    } catch (error: any) {
+      logger(
+        this.options.debug,
+        "error",
+        `Failed to extract token from simple cookie: ${error}`
+      );
+    }
+  }
+
+  /**
+   * Determines whether to use the slug or the domain to store the token, setting the storageKey accordingly.
+   */
+  private findStorageKey(): void {
+    let key: string | undefined;
+
+    if (this.inWaitingRoom) {
+      // Prioritise slug over domain if both are present.
+      const isWhiteLabel = !this.host.startsWith("wait");
+
+      const pathParts = this.path.split("/");
+
+      if (isWhiteLabel) {
+        // Extracts 1CB20oWp8dbA from format /ch/1CB20oWp8dbA?foo=bar
+        key = pathParts[2].split("?")[0];
+      } else {
+        // Extracts 1CB20oWp8dbA from format /1CB20oWp8dbA?foo=bar
+        key = pathParts[1].split("?")[0];
+      }
+
+      // If we still don't have a key, try to get it from the url parameter.
+      // This will be the case if we're in the waiting room and the slug is not present.
+      if (!key) {
+        const params = new URLSearchParams(this.path.split("?")[1]);
+        key = params.get("url") || undefined;
       }
     } else {
-      logger(this.options.debug, "error", "Token not found or invalid format");
-      return;
+      // If we're not in the waiting room, we can just use the domain as the key.
+      key = this.host;
+    }
+
+    this.storageKey = key;
+  }
+
+  /**
+   * Retrieves the token from local storage if possible.
+   * @throws {Error} When the storage key or local storage value is undefined.
+   */
+  public getTokenFromLocalStorage(): void {
+    try {
+      if (!this.storageKey) {
+        throw new Error("Storage key is not defined.");
+      }
+
+      if (!this.localStorageValue || !this.localStorageValue.token) {
+        throw new Error(
+          "Local storage value is not defined or does not contain a token."
+        );
+      }
+
+      const token = this.localStorageValue.token[this.storageKey];
+
+      if (!this.isValidToken(token)) {
+        throw new Error(`Invalid token format: ${token}`);
+      }
+
+      this.token = token;
+    } catch (error: any) {
+      logger(
+        this.options.debug,
+        "error",
+        `Failed to get token from local storage: ${error}`
+      );
     }
   }
 
-  public validateSignature() {
-    let signature = new Signature(
+  /**
+   * Validates the signature.
+   *
+   * @returns the result of signature validation
+   */
+  public validateSignature(): ReturnType<Signature["validateSignature"]> {
+    const signature = new Signature(
       this.activeConfig,
       this.hashedPrivateKey,
       this.signatureType,
@@ -296,115 +486,186 @@ export class Gatekeeper {
       this.options.debug
     );
 
-    let validate = signature.validateSignature();
-    return validate;
+    return signature.validateSignature();
   }
 
   /**
-   * Redirect user to waiting room if not promoted
+   * Redirects the request to another URL if it is not promoted.
+   *
+   * @returns Redirection response or error message.
    */
-  public redirectIfNotPromoted() {
-    return this.REQUEST.redirect(this.getRedirectUrl());
-  }
+  public redirectIfNotPromoted(): string {
+    try {
+      const redirectUrl = this.getRedirectUrl();
 
-  public redirectToCleanUrl(targetURL: string) {
-    this.REQUEST.redirect(decodeURIComponent(targetURL));
-  }
+      if (!redirectUrl) {
+        throw new Error("Unable to determine redirect URL");
+      }
 
-  public getRedirectUrl() {
-    let slug;
-
-    /**
-     * 1.) API
-     * 2.) Config (hybrid mode only)
-     * 3.) Fallback
-     * 4.) No slug
-     */
-    slug =
-      this.sessionStatus?.result?.slug ||
-      this.activeConfig?.slug ||
-      this.options.fallbackSlug ||
-      "";
-
-    return `${this.WAIT_URL}/${slug}?url=${this.targetURL}&ch-code=&ch-id=${this.token}&ch-public-key=${this.publicKey}`;
+      return this.REQUEST.redirect(redirectUrl);
+    } catch (error: any) {
+      logger(this.options.debug, "error", `Failed to redirect: ${error}`);
+      return `Redirect failed: ${error.message}`;
+    }
   }
 
   /**
-   * Generate Token Object
+   * Redirects the request to the decoded target URL.
+   *
+   * @param targetURL The target URL to redirect to.
+   * @throws {Error} If decoding or redirecting fails.
    */
-  private generateCookieObjects() {
-    let tokenDatestamp = new Date().getTime();
-    let signatureGenerated: string = "";
+  public redirectToCleanUrl(targetURL: string): void {
+    try {
+      const decodedUrl = decodeURIComponent(targetURL);
 
-    //Prioritise API response data over parameter data.
-    if (this.requested) {
-      signatureGenerated = this.requested;
-    } else {
-      signatureGenerated = this.specialParameters.chRequested;
+      // If decodedUrl is not a valid URL, throw an error.
+      if (!/^http[s]?:\/\/.*/.test(decodedUrl)) {
+        throw new Error("Decoded URL is not a valid URL");
+      }
+
+      this.REQUEST.redirect(decodedUrl);
+    } catch (error: any) {
+      logger(
+        this.options.debug,
+        "error",
+        `Failed to redirect to clean URL: ${error}`
+      );
+      throw error;
     }
-
-    let cookieObject = new GenerateCookieObject({
-      tokenDatestamp: tokenDatestamp,
-      tokenDatestampSignature: generateSignature(
-        `${this.hashedPrivateKey}${tokenDatestamp}`
-      ),
-      tokenSignature: this.simpleSignature[0],
-      //tokenSignatureGenerated: this.specialParameters.chRequested,
-      tokenSignatureGenerated: signatureGenerated,
-      tokenSignatures: this.complexSignature,
-      tokenValue: this.token,
-    });
-
-    let signatureObject = cookieObject.signatureObject();
-    let tokenObject = cookieObject.tokenObject();
-
-    this.cookieSignatureObject = signatureObject;
-    this.cookieTokenObject = tokenObject;
   }
 
-  private getCookie() {
-    //get cookies from request or override
-    let cookies;
-    if (this.cookies.length === 0) {
-      cookies = this.REQUEST.getCookies();
-    } else {
-      cookies = this.cookies;
-    }
+  /**
+   * Generates a redirect URL based on multiple fallback conditions.
+   *
+   * @throws {Error} If targetURL, token, or publicKey is missing or invalid.
+   * @returns The generated redirect URL.
+   */
+  public getRedirectUrl(): string {
+    try {
+      const slug =
+        this.sessionStatus?.result?.slug ||
+        this.activeConfig?.slug ||
+        this.options.fallbackSlug ||
+        "";
 
-    //extract crowdhandler cookie value if it exists depending on mode
-    if (cookies && this.options.mode === "hybrid") {
-      try {
-        let cookieArray = cookies.split(";");
-        for (let i = 0; i < cookieArray.length; i++) {
-          let cookie = cookieArray[i].split("=");
-          if (cookie[0] === this.COOKIE_NAME) {
-            let rawcookie = cookie[1];
-            let decodedCookie = decodeURIComponent(rawcookie);
+      const redirectUrl = `${this.WAIT_URL}/${slug}?url=${this.targetURL}&ch-code=&ch-id=${this.token}&ch-public-key=${this.publicKey}`;
+
+      return redirectUrl;
+    } catch (error: any) {
+      logger(
+        this.options.debug,
+        "error",
+        `Failed to generate redirect URL: ${error}`
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Generates token and signature objects for cookies.
+   *
+   * @throws {Error} If token generation fails.
+   */
+  private generateCookieObjects(): void {
+    try {
+      const tokenDatestamp = new Date().getTime();
+      let signatureGenerated: string = "";
+
+      // Prioritise API response data over parameter data.
+      signatureGenerated = this.requested || this.specialParameters.chRequested;
+
+      const cookieObject = new GenerateCookieObject({
+        tokenDatestamp,
+        tokenDatestampSignature: generateSignature(
+          `${this.hashedPrivateKey}${tokenDatestamp}`
+        ),
+        tokenSignature: this.simpleSignature[0],
+        tokenSignatureGenerated: signatureGenerated,
+        tokenSignatures: this.complexSignature,
+        tokenValue: this.token,
+      });
+
+      this.cookieSignatureObject = cookieObject.signatureObject();
+      this.cookieTokenObject = cookieObject.tokenObject();
+    } catch (error: any) {
+      logger(
+        this.options.debug,
+        "error",
+        `Failed to generate cookie objects: ${error}`
+      );
+      throw error;
+    }
+  }
+
+  // //TODO: Convert to an independent class for full local storage functionality
+  // /**
+  //  * Updates the token in the local storage object.
+  //  * If no local storage object exists, creates a new one.
+  //  * @param token - The new token to update in local storage.
+  //  */
+  public updateLocalStorageToken(token: string): void {
+    try {
+      if (this.localStorageValue && this.storageKey) {
+        // Update the existing LocalStorageObject token field.
+        this.localStorageValue.token[this.storageKey] = token;
+      } else if (this.storageKey) {
+        // Create a new LocalStorageObject if it doesn't exist.
+        this.localStorageValue = {
+          countdown: {},
+          positions: {},
+          token: { [this.storageKey]: token },
+        };
+      }
+    } catch (error) {
+      logger(this.options.debug, "error", `Failed to update local storage token: ${error}`);
+    }
+  }
+
+  /**
+   * Retrieves and processes cookies from request or override.
+   */
+  private getCookie(): void {
+    try {
+      // Get cookies from request or override.
+      const cookies =
+        this.cookies.length === 0 ? this.REQUEST.getCookies() : this.cookies;
+
+      // If no cookies, there is no further processing needed.
+      if (!cookies) {
+        logger(this.options.debug, "info", "No cookies found.");
+        return;
+      }
+
+      // Split the cookies string into individual cookie strings.
+      const cookieArray = cookies.split(";");
+
+      for (const cookieStr of cookieArray) {
+        const [cookieName, ...cookieValueParts] = cookieStr.split("=");
+        const cookieValue = cookieValueParts.join("=");
+
+        // If this is the cookie we're interested in, process it.
+        if (cookieName === this.STORAGE_NAME) {
+          if (this.options.mode === "hybrid") {
+            let decodedCookie = decodeURIComponent(cookieValue);
             let processedCookie: z.infer<typeof CookieObject> | undefined =
               JSON.parse(decodedCookie);
             this.cookieValue = processedCookie;
+          } else {
+            this.simpleCookieValue = cookieValue;
           }
         }
-      } catch (error: any) {
-        logger(this.options.debug, "error", error);
-        return;
       }
-    } else if (cookies && this.options.mode === "full") {
-      try {
-        let cookieArray = cookies.split(";");
-        for (let i = 0; i < cookieArray.length; i++) {
-          let cookie = cookieArray[i].split("=");
-          if (cookie[0] === this.COOKIE_NAME) {
-            this.simpleCookieValue = cookie[1];
-          }
-        }
-      } catch (error: any) {
-        logger(this.options.debug, "error", error);
-        return;
-      }
+    } catch (error: any) {
+      logger(
+        this.options.debug,
+        "error",
+        `Failed to get or process cookies: ${error}`
+      );
     }
   }
 
+  //TODO: Improve this method alongside refactor of validateRequestHybridMode
   public generateCookie(tokens: any[]) {
     return {
       integration: "JSDK",
@@ -413,49 +674,128 @@ export class Gatekeeper {
   }
 
   /**
-   * Set CrowdHandler session cookie
+   * Set CrowdHandler session cookie.
+   *
+   * @param value - The value of the cookie to be set.
+   *
+   * @throws If an error occurs while setting the cookie, an Error is thrown and caught, logged with the logger,
+   * and the function returns false.
+   *
+   * @returns True if the cookie was successfully set, false otherwise.
    */
-  public setCookie(value: string) {
-    this.REQUEST.setCookie(value);
-    //Neccessary?
-    /*{
+  public setCookie(value: string): boolean {
+    try {
+      // Set the cookie with the provided value and options
+      this.REQUEST.setCookie(value, {
         secure: true,
         sameSite: "strict",
         path: "/",
         domain: this.host,
-      };*/
+      });
+      return true;
+    } catch (error: any) {
+      logger(this.options.debug, "error", error);
+      return false;
+    }
+  }
+
+  /**
+   * Set a local storage item.
+   *
+   * @param options - Optional. An object containing the storage name and the local storage value.
+   *
+   * @throws If an error occurs while setting the local storage item, an Error is thrown and caught, logged with the logger,
+   * and the function returns false.
+   *
+   * @returns True if the local storage item was successfully set, false otherwise.
+   */
+  public setLocalStorage(
+    options?: z.infer<typeof LocalStorageOptions>
+  ): boolean {
+    try {
+      // determine the name to use
+      const nameToUse = options?.storageName || this.STORAGE_NAME;
+
+      // determine the value to use
+      const valueToUse =
+        options?.localStorageValue || JSON.stringify(this.localStorageValue);
+
+      // set the local storage item
+      this.REQUEST.setLocalStorageItem(nameToUse, valueToUse);
+
+      return true;
+    } catch (error: any) {
+      logger(this.options.debug, "error", error);
+      return false;
+    }
+  }
+
+  /**
+   * Get a local storage item.
+   *
+   * @throws If an error occurs while getting or parsing the local storage item,
+   * an Error is thrown and caught, logged with the logger, and the function returns null.
+   *
+   * @returns The value from local storage parsed as a LocalStorageObject, or null if an error occurs or if the item does not exist.
+   */
+  public getLocalStorage(): z.infer<typeof LocalStorageObject> | null {
+    try {
+      const crowdhandler = localStorage.getItem(this.STORAGE_NAME);
+      if (crowdhandler) {
+        const localStorageValue = LocalStorageObject.parse(
+          JSON.parse(crowdhandler)
+        );
+        this.localStorageValue = localStorageValue; // still assign it to the class property if you need
+        return localStorageValue;
+      }
+
+      logger(
+        this.options.debug,
+        "Info: No data found in local storage for key:",
+        this.STORAGE_NAME
+      );
+      return null;
+    } catch (error: any) {
+      logger(this.options.debug, "Error reading from local storage:", error);
+      return null;
+    }
   }
 
   /**
    * Send current page performance to CrowdHandler
-   * @param statusCode HTTP Response code (optional, defaults to 200)
-   * @param sample Sample rate (0.0 - 1.0). Record 20% of requests by default (optional, defaults to 0.2)
-   * @param overrideElapsed Override elapsed time (optional)
+   * @param options Options object containing HTTP Response code, Sample rate, Override elapsed time, and Response ID.
+   * @throws If an error occurs while making the API request, an Error is thrown and caught, and then logged with the logger.
    */
-  public recordPerformance(options: z.infer<typeof RecordPerformanceOptions>) {
-    const validatedOptions = RecordPerformanceOptions.parse(options);
-  
-    const {
-      statusCode,
-      sample,
-      overrideElapsed,
-      responseID,
-    } = validatedOptions;
-  
-    const lottery = Math.random();
-    const currentResponseID = responseID || this.responseID;
-  
-    if (!currentResponseID || lottery >= sample) {
-      return;
+  public async recordPerformance(
+    options: z.infer<typeof RecordPerformanceOptions>
+  ) {
+    try {
+      // Parse and validate options
+      const validatedOptions = RecordPerformanceOptions.parse(options);
+
+      const { statusCode, sample, overrideElapsed, responseID } =
+        validatedOptions;
+
+      // Generate a random number for sampling
+      const lottery = Math.random();
+      const currentResponseID = responseID || this.responseID;
+
+      // If there's no responseID or if the random number is higher than the sample rate, return early
+      if (!currentResponseID || lottery >= sample) {
+        return;
+      }
+
+      const elapsed =
+        overrideElapsed !== undefined ? overrideElapsed : this.timer.elapsed();
+
+      // Asynchronously send the performance data to CrowdHandler, no need to await the promise
+      this.PublicClient.responses().put(currentResponseID, {
+        httpCode: statusCode,
+        time: elapsed,
+      });
+    } catch (error: any) {
+      logger(this.options.debug, "Error recording performance:", error);
     }
-  
-    const elapsed = overrideElapsed !== undefined ? overrideElapsed : this.timer.elapsed();
-  
-    // No need to wait for this to complete. It's a throwaway request.
-    this.PublicClient.responses().put(currentResponseID, {
-      httpCode: statusCode,
-      time: elapsed,
-    });
   }
 
   public async validateRequest() {
@@ -467,6 +807,7 @@ export class Gatekeeper {
         return await this.validateRequestFullMode();
         break;
       case "clientside":
+        return await this.validateRequestClientSideMode();
         break;
       default:
         "full";
@@ -475,93 +816,188 @@ export class Gatekeeper {
   }
 
   /**
-   * Validate request using CrowdHandler API only
+   * Validate request in a client-side mode.
+   *
+   * This method checks for a CrowdHandler cookie first,
+   * falls back to local storage if the cookie doesn't exist,
+   * and gets the session status for the request.
+   *
+   * It processes different cases based on the session status and the specific options set,
+   * ultimately returning an object that contains the results of the validation process.
+   *
+   * @return {Promise<z.infer<typeof validateRequestObject>>} Result of the validation process.
    */
-  private async validateRequestFullMode() {
-    let result: z.infer<typeof validateRequestObject> = {
+  private async validateRequestClientSideMode(): Promise<
+    z.infer<typeof ValidateRequestObject>
+  > {
+    // Initial result object with default values
+    const defaultResult: z.infer<typeof ValidateRequestObject> = {
       promoted: false,
       stripParams: false,
       setCookie: false,
+      setLocalStorage: false,
+      localStorageValue: "",
+      responseID: "",
+      slug: "",
+      targetURL: "",
+    };
+
+    logger(this.options.debug, "info", `IP: ${this.ip}`);
+    logger(this.options.debug, "info", `Agent: ${this.agent}`);
+    logger(this.options.debug, "info", `Host: ${this.host}`);
+    logger(this.options.debug, "info", `Path: ${this.path}`);
+    logger(this.options.debug, "info", `Lang: ${this.lang}`);
+
+    const result = { ...defaultResult };
+
+    // If path matches the ignore pattern, bypass it and promote the result
+    if (ignoredPatternsCheck(this.path, this.ignore)) {
+      logger(this.options.debug, "info", `Ignored path: ${this.path}`);
+      result.promoted = true;
+      return result;
+    }
+
+    this.processURL();
+    result.targetURL = this.targetURL || "";
+
+    this.getCookie();
+
+    if (!this.simpleCookieValue) {
+      this.getLocalStorage();
+    }
+
+    this.findStorageKey();
+    this.getToken();
+    await this.getSessionStatus();
+
+    const sessionStatusType = HttpErrorWrapper.safeParse(this.sessionStatus);
+
+    if (
+      sessionStatusType.success &&
+      this.sessionStatus?.result.status !== 200
+    ) {
+      result.promoted = this.options.trustOnFail || false;
+      result.slug = this.options.trustOnFail
+        ? undefined
+        : this.options.fallbackSlug || "";
+      return result;
+    }
+
+    if (this.sessionStatus?.result.promoted === 0) {
+      result.promoted = false;
+      result.slug = this.sessionStatus.result.slug || "";
+      this.token = this.sessionStatus.result.token || "";
+      return result;
+    } else if (this.sessionStatus?.result.promoted === 1) {
+      result.promoted = true;
+      result.setLocalStorage = true;
+
+      if (this.sessionStatus.result.token) {
+        this.updateLocalStorageToken(this.sessionStatus.result.token);
+        if (this.localStorageValue) {
+          result.localStorageValue =
+            JSON.stringify(this.localStorageValue) || "";
+        }
+      }
+
+      if (this.sessionStatus.result.responseID) {
+        result.responseID = this.sessionStatus.result.responseID || "";
+      }
+
+      if (this.specialParameters.chRequested) {
+        result.stripParams = true;
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Validates the request by making full use of CrowdHandler API.
+   * It handles the request and sets the necessary response based on the session status and API response.
+   * @return {Promise<z.infer<typeof ValidateRequestObject>>} - The resulting status after validating the request.
+   */
+  private async validateRequestFullMode(): Promise<
+    z.infer<typeof ValidateRequestObject>
+  > {
+    // Default result object
+    let result: z.infer<typeof ValidateRequestObject> = {
+      promoted: false,
+      stripParams: false,
+      setCookie: false,
+      setLocalStorage: false,
       cookieValue: "",
       responseID: "",
       slug: "",
       targetURL: "",
     };
 
-    logger(this.options.debug, "info", "IP: " + this.ip);
-    logger(this.options.debug, "info", "Agent: " + this.agent);
-    logger(this.options.debug, "info", "Host: " + this.host);
-    logger(this.options.debug, "info", "Path: " + this.path);
-    logger(this.options.debug, "info", "Lang: " + this.lang);
+    try {
+      // Log details for debugging
+      logger(this.options.debug, "info", `IP: ${this.ip}`);
+      logger(this.options.debug, "info", `Agent: ${this.agent}`);
+      logger(this.options.debug, "info", `Host: ${this.host}`);
+      logger(this.options.debug, "info", `Path: ${this.path}`);
+      logger(this.options.debug, "info", `Lang: ${this.lang}`);
 
-    //Bypass paths that match the ignore pattern
-    if (ignoredPatternsCheck(this.path, this.ignore)) {
-      logger(this.options.debug, "info", "Ignored path: " + this.path);
-      result.promoted = true;
-      return result;
-    }
-
-    this.processURL();
-
-    result.targetURL = this.targetURL;
-
-    this.getCookie();
-
-    //We need to have a simple version of the cookie for full mode
-    this.getToken(this.specialParameters.chID, this.cookieValue);
-
-    await this.getSessionStatus();
-
-    //Use zod safeparse to check that we're working with the SessionStatusErrorWrapper type
-    let sessionStatusType = httpErrorWrapper.safeParse(this.sessionStatus);
-
-    if (sessionStatusType.success) {
-      if (this.sessionStatus && this.sessionStatus.result.status !== 200) {
-        //Can't process the request but we can trust it if trustOnFail is set to true
-        if (this.options.trustOnFail) {
-          result.promoted = true;
-        } else {
-          result.promoted = false;
-          result.slug = this.options.fallbackSlug;
-        }
-
+      // Skip paths that match the ignore pattern
+      if (ignoredPatternsCheck(this.path, this.ignore)) {
+        logger(this.options.debug, "info", `Ignored path: ${this.path}`);
+        result.promoted = true;
         return result;
       }
-    }
 
-    if (this.sessionStatus && this.sessionStatus.result.promoted === 0) {
-      result.promoted = false;
+      this.processURL();
+      result.targetURL = this.targetURL;
+      this.getCookie();
+      this.getToken();
+      await this.getSessionStatus();
 
-      if (this.sessionStatus.result.slug) {
-        result.slug = this.sessionStatus.result.slug;
+      // Use zod safeparse to check that we're working with the SessionStatusErrorWrapper type
+      let sessionStatusType = HttpErrorWrapper.safeParse(this.sessionStatus);
+
+      // Handle session status errors
+      if (sessionStatusType.success) {
+        if (this.sessionStatus?.result.status !== 200) {
+          // Can't process the request but we can trust it if trustOnFail is set to true
+          result.promoted = this.options.trustOnFail;
+          if (!this.options.trustOnFail)
+            result.slug = this.options.fallbackSlug;
+
+          return result;
+        }
       }
 
-      //Set the token to make sure it is included in redirect parameters
-      if (this.sessionStatus.result.token) {
-        this.token = this.sessionStatus.result.token;
+      // Processing based on promotion status
+      if (this.sessionStatus) {
+        const { promoted, slug, token, responseID } = this.sessionStatus.result;
+
+        result.promoted = promoted === 1;
+        result.setCookie = promoted === 1;
+        result.slug = slug || result.slug;
+        result.cookieValue =
+          promoted === 1 && token ? token : result.cookieValue;
+        result.responseID =
+          promoted === 1 && responseID ? responseID : result.responseID;
+        this.token = token || this.token;
+
+        if (promoted === 1 && this.specialParameters.chRequested) {
+          result.stripParams = true;
+        }
       }
 
       return result;
-    } else if (this.sessionStatus && this.sessionStatus.result.promoted === 1) {
-      result.promoted = true;
-      result.setCookie = true;
-
-      if (this.sessionStatus.result.token) {
-        result.cookieValue = this.sessionStatus.result.token;
-      }
-
-      if (this.sessionStatus.result.responseID) {
-        result.responseID = this.sessionStatus.result.responseID;
-      }
-
-      if (this.specialParameters.chRequested) {
-        result.stripParams = true;
-      }
-
-      return result;
+    } catch (error) {
+      logger(
+        this.options.debug,
+        "error",
+        `An error occurred during request validation: ${error}`
+      );
+      throw error;
     }
   }
 
+  //TODO: This method is a complex beast and needs refactoring
   /**
    * Validate request using signature and/or Crowdhandler API when required
    */
@@ -572,10 +1008,11 @@ export class Gatekeeper {
     let freshSignature;
     let processedCookie;
 
-    let result: z.infer<typeof validateRequestObject> = {
+    let result: z.infer<typeof ValidateRequestObject> = {
       promoted: false,
       stripParams: false,
       setCookie: false,
+      setLocalStorage: false,
       cookieValue: "",
       targetURL: "",
     };
@@ -601,7 +1038,7 @@ export class Gatekeeper {
     await this.getConfig();
 
     //Use zod safeparse to check that we're working with the SessionStatusErrorWrapper type
-    let configStatusType = httpErrorWrapper.safeParse(this.activeConfig);
+    let configStatusType = HttpErrorWrapper.safeParse(this.activeConfig);
 
     if (configStatusType.success) {
       if (this.activeConfig && this.activeConfig.result.status !== 200) {
@@ -633,8 +1070,11 @@ export class Gatekeeper {
 
     logger(this.options.debug, "info", "Cookie: " + this.cookieValue);
 
-    this.getSignature(this.specialParameters.chIDSignature, this.cookieValue);
-    this.getToken(this.specialParameters.chID, this.cookieValue);
+    this.getSignature({
+      chIDSignature: this.specialParameters.chIDSignature,
+      crowdhandlerCookieValue: this.cookieValue,
+    });
+    this.getToken();
 
     logger(this.options.debug, "info", "Signature: " + this.simpleSignature);
     logger(
@@ -661,7 +1101,7 @@ export class Gatekeeper {
 
         //Handle a failed session status check
         //Use zod safeparse to check that we're working with the SessionStatusErrorWrapper type
-        let sessionStatusType = httpErrorWrapper.safeParse(this.sessionStatus);
+        let sessionStatusType = HttpErrorWrapper.safeParse(this.sessionStatus);
 
         if (sessionStatusType.success) {
           if (this.sessionStatus && this.sessionStatus.result.status !== 200) {
@@ -681,7 +1121,7 @@ export class Gatekeeper {
         if (this.sessionStatus && this.sessionStatus.result.promoted === 0) {
           if (this.sessionStatus.result.token) {
             token = this.sessionStatus.result.token;
-            this.getToken(token);
+            this.getToken({ chID: token });
           }
 
           result.promoted = false;
@@ -702,12 +1142,12 @@ export class Gatekeeper {
 
           if (this.sessionStatus.result.hash) {
             hash = this.sessionStatus.result.hash;
-            this.getSignature(hash);
+            this.getSignature({ chIDSignature: hash });
           }
 
           if (this.sessionStatus.result.token) {
             token = this.sessionStatus.result.token;
-            this.getToken(token);
+            this.getToken({ chID: token });
           }
         }
       } catch (error: any) {
@@ -736,7 +1176,7 @@ export class Gatekeeper {
 
         //Handle a failed session status check
         //Use zod safeparse to check that we're working with the SessionStatusErrorWrapper type
-        let sessionStatusType = httpErrorWrapper.safeParse(this.sessionStatus);
+        let sessionStatusType = HttpErrorWrapper.safeParse(this.sessionStatus);
 
         if (sessionStatusType.success) {
           if (this.sessionStatus && this.sessionStatus.result.status !== 200) {
@@ -769,18 +1209,20 @@ export class Gatekeeper {
 
           if (this.sessionStatus.result.hash) {
             hash = this.sessionStatus.result.hash;
-            this.getSignature(hash);
+            this.getSignature({ chIDSignature: hash });
           }
 
           if (this.sessionStatus.result.token) {
             token = this.sessionStatus.result.token;
-            this.getToken(token);
+            this.getToken({ chID: token });
           }
         }
       } catch (error: any) {
         logger(this.options.debug, "error", error);
       }
     }
+
+    //part 2 here
 
     //We've established that we have a valid signature at this point
     logger(this.options.debug, "info", "Signature is valid.");
@@ -835,7 +1277,12 @@ export class Gatekeeper {
       tokens[tokens.length - 1].touched = this.cookieTokenObject?.touched;
       tokens[tokens.length - 1].touchedSig = this.cookieTokenObject?.touchedSig;
     }
-    this.cookieValue = this.generateCookie(tokens);
+    try {
+      this.cookieValue = this.generateCookie(tokens);
+    } catch (error: any) {
+      logger(this.options.debug, "error", error);
+      // Handle the error as appropriate for your application...
+    }
     result.cookieValue = JSON.stringify(this.cookieValue);
 
     if (freshSignature && this.specialParameters.chRequested) {

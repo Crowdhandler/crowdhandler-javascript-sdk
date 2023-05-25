@@ -9,6 +9,10 @@ Install and Require
     
     const crowdhandler = require("crowdhandler-sdk")
 
+**or...** 
+
+    import crowdhandler from 'crowdhandler-sdk';
+
 Instantiate a Public API client
 --------------------------------
 
@@ -74,6 +78,14 @@ The GateKeeper class is a controller for interacting with the user request and t
 | mode | string | full | full, hybrid, clientside | Validation method. See below for more information on choosing a mode. |
 | timeout | integer | 5000 | 1 - 30000 | Outbound API communication timeout in milliseconds. | 
 | trustOnFail | boolean | true | false, true | If false, if an API call fails, or a malformed response is received, you will be redirected to CrowdHandler's ultimate catch-all waiting room until the API responds with more inforamtion. |
+
+**Mode: Full - Instantiation Example.**
+
+    const ch_gatekeeper = new crowdhandler.Gatekeeper(public_clent, ch_context, {publicKey: your_public_key}, {mode: full})
+   
+**Mode: Hybrid - Instantiation Example.**
+
+    const ch_gatekeeper = new crowdhandler.Gatekeeper(public_clent, ch_context, {publicKey: your_public_key, privateKey: your_private_key}, {mode: hybrid})
     
 options.mode
 -------

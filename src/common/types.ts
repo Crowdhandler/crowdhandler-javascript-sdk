@@ -33,7 +33,7 @@ export const SpecialParametersObject = z.object({
   chRequested: z.string(),
 });
 
-export const processURLResultObject = z.object({
+export const ProcessURLResultObject = z.object({
   targetURL: z.string(),
   specialParameters: SpecialParametersObject,
 });
@@ -51,6 +51,17 @@ export const CookieObject = z
     tokens: z.array(z.any()),
   })
   .catchall(z.any());
+
+export const LocalStorageObject = z.object({
+  countdown: z.record(z.unknown()),
+  positions: z.record(z.unknown()),
+  token: z.record(z.string()),
+});
+
+export const LocalStorageOptions = z.object({
+  storageName: z.string(),
+  localStorageValue: z.string(),
+});
 
 //Response structure validation
 export const RoomMetaObject = z
@@ -76,14 +87,28 @@ export const SignatureResponseObject = z.object({
   success: z.nullable(z.boolean()),
 });
 
-export const tokenObject = z.object({
+export const SignatureSourceObject = z.object({
+  chIDSignature: z.string().optional(),
+  crowdhandlerCookieValue: CookieObject.optional(),
+});
+
+export const GetTokenOptions = z.object({
+  //object can contain anything and we don't know any of the possible values
+  crowdhandlerCookieValue: CookieObject.optional(),
+  chID: z.string().optional(),
+  localStorageValue: LocalStorageObject.optional(),
+  simpleCookieValue: z.string().optional(),
+});
+
+export const TokenObject = z.object({
   token: z.string(),
   touched: z.number(),
   touchedSig: z.string(),
   signatures: z.array(z.any()),
 });
 
-export const tokenObjectConstructor = z.object({
+
+export const TokenObjectConstructor = z.object({
   tokenDatestamp: z.number(),
   tokenDatestampSignature: z.string(),
   tokenSignature: z.string(),
@@ -92,17 +117,19 @@ export const tokenObjectConstructor = z.object({
   tokenValue: z.string(),
 });
 
-export const validateRequestObject = z.object({
+export const ValidateRequestObject = z.object({
   promoted: z.boolean(),
   stripParams: z.boolean(),
   setCookie: z.boolean(),
   cookieValue: z.string().optional(),
+  setLocalStorage: z.boolean(),
+  localStorageValue: z.string().optional(),
   responseID: z.string().optional(),
   slug: z.string().optional(),
   targetURL: z.string().optional(),
 });
 
-export const httpErrorWrapper = z.object({
+export const HttpErrorWrapper = z.object({
   result: z.object({
     error: z.string().nullable(),
     status: z.number().nullable(),

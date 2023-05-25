@@ -2,7 +2,7 @@
   "compileOnSave": true,
   "compilerOptions": {
     "target": "es5",
-    "lib": ["ES2015.Promise"],
+    "lib": ["dom", "ES2015.Promise"],
     "module": "commonjs",
     "outDir": "./dist",
     "esModuleInterop": true,

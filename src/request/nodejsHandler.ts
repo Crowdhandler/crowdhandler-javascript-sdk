@@ -1,7 +1,7 @@
 import { CookieObject } from "../common/types";
 import { z } from "zod";
 
-export class NonLambdaHandler {
+export class NodeJSHandler {
     private request: any;
     private response: any;
   

@@ -1,18 +1,14 @@
 {
-  "name": "crowdhandler-sdk",
-  "version": "0.0.2-beta.1",
-  "description": "",
-  "homepage": "https://github.com/Crowdhandler/crowdhandler-javascript-sdk#readme",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/Crowdhandler/crowdhandler-javascript-sdk"
-  },
+  "name": "@crowdhandler/crowdhandler-javascript-sdk",
+  "version": "10.0.6",
+  "description": "CrowdHandler JS SDK ==================== JS SDK for interacting with CrowdHandler Public and Private APIs. Extensive functionality for checking and queuing users",
   "files": [
     "dist/**"
   ],
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc &&  madge --circular --extensions ts src/ ",
+    "publish": "npm publish --access=restricted",
     "test": "jest --coverage",
     "test:watch": "jest --watch"
   },
