@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const crowdhandler = require("crowdhandler-sdk");
 
-// Middleware to handle CrowdHandler logic for all GET requests
+// Middleware to handle CrowdHandler logic
 const crowdHandlerMiddleware = async (req, res, next) => {
   const publicKey = "YOUR_PUBLIC_KEY";
   const publicClient = new crowdhandler.PublicClient(publicKey);
