@@ -9,9 +9,6 @@ Install and Require
     
     const crowdhandler = require("crowdhandler-sdk")
 
-**or...** 
-
-    import crowdhandler from 'crowdhandler-sdk';
 
 Instantiate a Public API client
 --------------------------------
@@ -53,13 +50,13 @@ Instantiate a new GateKeeper object
 
 The GateKeeper class is a controller for interacting with the user request and the CrowdHandler API and taking appropriate action.
 
-    const ch_gatekeeper = new crowdhandler.Gatekeeper(public_client, ch_context, key_pair, your_private_key, options)
+    const ch_gatekeeper = new crowdhandler.Gatekeeper(public_client, ch_context, keys, options)
 
 **public_client**: Object
 
 **ch_context**: Object
 
-**key_pair**: Object
+**keys**: Object
 
 | Option | Type | Default | Values | Explanation |
 | ------ | ---- | ------- | ------ | ----------- |

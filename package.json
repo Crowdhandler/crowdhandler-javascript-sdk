@@ -1,6 +1,6 @@
 {
   "name": "crowdhandler-sdk",
-  "version": "1.0.0-beta.1",
+  "version": "1.1.0-beta.1",
   "description": "",
   "homepage": "https://github.com/Crowdhandler/crowdhandler-javascript-sdk#readme",
   "repository": {
@@ -13,6 +13,7 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc &&  madge --circular --extensions ts src/ ",
+    "publish": "npm run build && npm publish --access public",
     "test": "jest --coverage",
     "test:watch": "jest --watch"
   },
