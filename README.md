@@ -9,10 +9,6 @@ Install and Require
     
     const crowdhandler = require("crowdhandler-sdk")
 
-**or...** 
-
-    import crowdhandler from 'crowdhandler-sdk';
-
 Instantiate a Public API client
 --------------------------------
 
