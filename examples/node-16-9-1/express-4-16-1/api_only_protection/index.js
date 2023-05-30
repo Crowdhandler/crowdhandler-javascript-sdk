@@ -15,7 +15,7 @@ const crowdHandlerMiddleware = async (req, res, next) => {
     const ch_gatekeeper = new crowdhandler.Gatekeeper(
       public_client,
       ch_context,
-      publicKey
+      {publicKey: publicKey}
     );
 
     let decodedBody;
