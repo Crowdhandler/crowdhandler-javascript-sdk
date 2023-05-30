@@ -77,10 +77,12 @@ The GateKeeper class is a controller for interacting with the user request and t
 
 **Mode: Full - Instantiation Example.**
 
+    //public_clent, ch_context, keys, options
     const ch_gatekeeper = new crowdhandler.Gatekeeper(public_clent, ch_context, {publicKey: your_public_key}, {mode: full})
    
 **Mode: Hybrid - Instantiation Example.**
 
+    //public_clent, ch_context, keys, options
     const ch_gatekeeper = new crowdhandler.Gatekeeper(public_clent, ch_context, {publicKey: your_public_key, privateKey: your_private_key}, {mode: hybrid})
     
 options.mode
