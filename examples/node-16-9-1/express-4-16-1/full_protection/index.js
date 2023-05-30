@@ -7,7 +7,7 @@ const crowdHandlerMiddleware = async (req, res, next) => {
   const publicKey = "YOUR_PUBLIC_KEY";
   const publicClient = new crowdhandler.PublicClient(publicKey);
   const chContext = new crowdhandler.RequestContext(req, res);
-  const chGatekeeper = new crowdhandler.Gatekeeper(publicClient, chContext);
+  const chGatekeeper = new crowdhandler.Gatekeeper(publicClient, chContext, {publicKey: publicKey});
 
   try {
     const chStatus = await chGatekeeper.validateRequest();
