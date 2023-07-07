@@ -12,11 +12,11 @@ export class PublicClient extends Client {
   }
 
   requests() {
-    return new Resource(this.key, "/v1/requests/", { timeout: this.timeout, debug: this.debug, api_url: this.api_url });
+    return new Resource(this.key, "/v1/requests/ID_PLACEHOLDER", { timeout: this.timeout, debug: this.debug, api_url: this.api_url });
   }
 
   responses() {
-    return new Resource(this.key, "/v1/responses/", { timeout: this.timeout, debug: this.debug, api_url: this.api_url });
+    return new Resource(this.key, "/v1/responses/ID_PLACEHOLDER", { timeout: this.timeout, debug: this.debug, api_url: this.api_url });
   }
 
   rooms() {

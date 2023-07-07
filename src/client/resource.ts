@@ -7,29 +7,51 @@ export class Resource extends Client {
     path: string,
     options: { timeout?: number; debug?: boolean; api_url?: string } = {}
   ) {
-    const { timeout = 5000, debug = false, api_url = "https://api.crowdhandler.com" } =
-      options ?? {};
+    const {
+      timeout = 5000,
+      debug = false,
+      api_url = "https://api.crowdhandler.com",
+    } = options ?? {};
     super(api_url, key, options);
     this.path = path;
   }
 
+  private formatPath(path: string, id: string) {
+    // If id is not provided, replace it with an empty string.
+    id = id || "";
+
+    //this.path may contain a placeholder for the id. replace it with the actual id.
+    path = path.replace("ID_PLACEHOLDER", id);
+
+    return path;
+  }
+
   delete(id: string, body: object) {
-    return super.httpDELETE(this.path + id, body);
+    this.path = this.formatPath(this.path, id);
+
+    return super.httpDELETE(this.path, body);
   }
 
   get(id?: string, params?: object) {
-    if (id === undefined) {
+    //Handle id being an optional parameter
+    if (!id) {
       id = "";
     }
 
-    return super.httpGET(this.path + id, params);
+    this.path = this.formatPath(this.path, id);
+
+    return super.httpGET(this.path, params);
   }
 
   post(body: object) {
+    this.path = this.formatPath(this.path, "");
+
     return super.httpPOST(this.path, body);
   }
 
   put(id: string, body: object) {
-    return super.httpPUT(this.path + id, body);
+    this.path = this.formatPath(this.path, id);
+
+    return super.httpPUT(this.path, body);
   }
 }
