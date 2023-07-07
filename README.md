@@ -123,7 +123,7 @@ When every millisecond counts.
 
 `clientside`
 
-_coming soon..._
+Suitable for clientside only frameworks such as React.
 
 
 Gatekeeper Overrides
@@ -230,15 +230,116 @@ You can override the class inferred performance metrics and provide your own if 
 | statusCode | integer | 200 | 2xx-5xx | Status code that associated with the request. |
 
 
+# PrivateClient
+
+`PrivateClient` is a class extending `Client` which serves as the main entry point for interacting with private CrowdHandler API methods. It requires a private API key for instantiation which can be found in the CrowdHandler control panel. 
+
+## Instantiate a Private API Client
+
+    const private_clent = new crowdhandler.PrivateClient (your_private_key, options)
+
+**your_public_key**: string
+    
+**options** : object (optional)
+
+| Option | Type | Default | Values | Explanation |
+| ------ | ---- | ------- | ------ | ----------- |
+| api_url | string | https://api.crowdhandler.com | * | API endpoint. |
+| debug | string | false | false/true | Outputs debugging information. |
+| timeout | integer | 5000 | 1 - 30000 | Outbound API communication timeout in milliseconds. | 
+
+
+## Methods
+
+All methods return a new `Resource` instance for interacting with a specific endpoint of the API.
+
+**Note1**: Full API documentation containing response examples, required parameter fields and more can be found in your control panel. Navigate to **account** -> **api**. 
+
+**Note2**: In all the methods below, the `ID_PLACEHOLDER` is a placeholder for the actual id required by the specific API endpoint. It should be replaced by the actual id before making the API call.
+
+### account()
+
+This method returns a `Resource` instance for interacting with the `/v1/account/` endpoint.
+
+### accountPlan()
+
+This method returns a `Resource` instance for interacting with the `/v1/account/plan` endpoint.
+
+### codes()
+
+This method returns a `Resource` instance for interacting with the `/v1/codes/ID_PLACEHOLDER` endpoint.
+
+### domains()
+
+This method returns a `Resource` instance for interacting with the `/v1/domains/ID_PLACEHOLDER` endpoint.
+
+### domainsIPs()
+
+This method returns a `Resource` instance for interacting with the `/v1/domains/ID_PLACEHOLDER/ips` endpoint.
+
+### domainsReports()
+
+This method returns a `Resource` instance for interacting with the `/v1/domains/ID_PLACEHOLDER/reports` endpoint.
+
+### domainsRequests()
+
+This method returns a `Resource` instance for interacting with the `/v1/domains/ID_PLACEHOLDER/requests` endpoint.
+
+### domainsRooms()
+
+This method returns a `Resource` instance for interacting with the `/v1/domains/ID_PLACEHOLDER/rooms` endpoint.
+
+### domainsURLs()
+
+This method returns a `Resource` instance for interacting with the `/v1/domains/ID_PLACEHOLDER/urls` endpoint.
+
+### groups()
+
+This method returns a `Resource` instance for interacting with the `/v1/groups/ID_PLACEHOLDER` endpoint.
+
+### groupsBatch()
+
+This method returns a `Resource` instance for interacting with the `/v1/groups/ID_PLACEHOLDER/batch` endpoint.
+
+### groupsCodes()
+
+This method returns a `Resource` instance for interacting with the `/v1/groups/ID_PLACEHOLDER/codes` endpoint.
+
+### ips()
+
+This method returns a `Resource` instance for interacting with the `/v1/ips/ID_PLACEHOLDER` endpoint.
+
+### reports()
+
+This method returns a `Resource` instance for interacting with the `/v1/reports/ID_PLACEHOLDER` endpoint.
+
+### rooms()
+
+This method returns a `Resource` instance for interacting with the `/v1/rooms/ID_PLACEHOLDER` endpoint.
+
+### roomsReports()
+
+This method returns a `Resource` instance for interacting with the `/v1/rooms/ID_PLACEHOLDER/reports` endpoint.
+
+### roomsSessions()
+
+This method returns a `Resource` instance for interacting with the `/v1/rooms/ID_PLACEHOLDER/sessions` endpoint.
+
+### sessions()
+
+This method returns a `Resource` instance for interacting with the `/v1/sessions/ID_PLACEHOLDER` endpoint.
+
+### templates()
+
+This method returns a `Resource` instance for interacting with the `/v1/templates/ID_PLACEHOLDER` endpoint.
+
 Putting it all together
 ----------------------------
 
-See the examples directory...
+See examples:
 
-Instantiate a Private API Client
---------------------------------
+<https://github.com/Crowdhandler/crowdhandler-javascript-sdk/tree/main/examples>
 
-_coming soon..._
 
 More information
 ----------------
