@@ -6,7 +6,7 @@
 const crowdhandler = require("crowdhandler-sdk");
 
 //Instantiate a new PrivateClient object
-let private_client = new crowdhandler.PrivateClient("YOUR_PRIVATE_KEY_HERE");
+const private_client = new crowdhandler.PrivateClient("YOUR_PRIVATE_KEY_HERE");
 
 //Get a list of all domains associated with the key
 let domains = await private_client.domains().get();
