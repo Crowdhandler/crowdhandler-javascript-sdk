@@ -7,7 +7,9 @@ const crowdHandlerMiddleware = async (req, res, next) => {
   const publicKey = "YOUR_PUBLIC_KEY";
   const publicClient = new crowdhandler.PublicClient(publicKey);
   const chContext = new crowdhandler.RequestContext(req, res);
-  const chGatekeeper = new crowdhandler.Gatekeeper(publicClient, chContext, {publicKey: publicKey});
+  const chGatekeeper = new crowdhandler.Gatekeeper(publicClient, chContext, {
+    publicKey: publicKey,
+  });
 
   try {
     const chStatus = await chGatekeeper.validateRequest();
@@ -41,7 +43,7 @@ router.use(crowdHandlerMiddleware);
 // Route handler for all paths
 router.get("*", (req, res, next) => {
   //YOUR CODE BELOW THIS COMMENT
-  
+
   // Render the view and send the HTML
   res.render("index", { title: "hello" }, (err, html) => {
     // Handle any errors during rendering
@@ -55,6 +57,18 @@ router.get("*", (req, res, next) => {
     if (res.locals.chGatekeeper) {
       res.locals.chGatekeeper.recordPerformance();
     }
+
+    /*
+     * IMPORTANT CONSIDERATION:
+     *
+     * The default status code sent to CrowdHandler is '200'. However, if a different status code needs to be sent,
+     * it can be achieved by passing it as a parameter to the 'recordPerformance' method.
+     *
+     * Example:
+     * chGatekeeper.recordPerformance({status: 404});
+     *
+     * If you are using CrowdHandler's autotune feature, is is crucial to pass accurate status codes to CrowdHandler to ensure the precision of analytics and autotune results.
+     */
   });
 });
 

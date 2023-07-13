@@ -131,10 +131,7 @@ export class Gatekeeper {
     this.timer = new Timer();
 
     //If host is wait.crowdhandler.com, wait-dev.crowdhandler.com or path starts with /ch/ then we're in the waiting room
-    if (
-      this.host === "wait.crowdhandler.com" ||
-      this.path.startsWith("/ch/")
-    ) {
+    if (this.host === "wait.crowdhandler.com" || this.path.startsWith("/ch/")) {
       this.inWaitingRoom = true;
     }
   }
@@ -259,7 +256,11 @@ export class Gatekeeper {
         throw new Error("Failed to parse URL.");
       }
     } catch (error) {
-      logger(this.options.debug, "error", `Error while processing URL: ${error}`);
+      logger(
+        this.options.debug,
+        "error",
+        `Error while processing URL: ${error}`
+      );
     }
   }
 
@@ -618,7 +619,11 @@ export class Gatekeeper {
         };
       }
     } catch (error) {
-      logger(this.options.debug, "error", `Failed to update local storage token: ${error}`);
+      logger(
+        this.options.debug,
+        "error",
+        `Failed to update local storage token: ${error}`
+      );
     }
   }
 
@@ -767,11 +772,18 @@ export class Gatekeeper {
    * @throws If an error occurs while making the API request, an Error is thrown and caught, and then logged with the logger.
    */
   public async recordPerformance(
-    options: z.infer<typeof RecordPerformanceOptions>
+    options?: z.infer<typeof RecordPerformanceOptions>
   ) {
     try {
-      // Parse and validate options
-      const validatedOptions = RecordPerformanceOptions.parse(options);
+      // Parse and validate options if provided, else use default values
+      const validatedOptions = options
+        ? RecordPerformanceOptions.parse(options)
+        : {
+            statusCode: 200, // default HTTP response code
+            sample: 0.2, // default sample rate
+            overrideElapsed: undefined, // no elapsed time override
+            responseID: undefined, // no responseID
+          };
 
       const { statusCode, sample, overrideElapsed, responseID } =
         validatedOptions;
@@ -902,6 +914,7 @@ export class Gatekeeper {
 
       if (this.sessionStatus.result.responseID) {
         result.responseID = this.sessionStatus.result.responseID || "";
+        this.responseID = this.sessionStatus.result.responseID || "";
       }
 
       if (this.specialParameters.chRequested) {
@@ -979,6 +992,7 @@ export class Gatekeeper {
           promoted === 1 && token ? token : result.cookieValue;
         result.responseID =
           promoted === 1 && responseID ? responseID : result.responseID;
+        this.responseID = promoted === 1 && responseID ? responseID : "";
         this.token = token || this.token;
 
         if (promoted === 1 && this.specialParameters.chRequested) {

@@ -273,23 +273,23 @@ This method returns a `Resource` instance for interacting with the `/v1/codes/ID
 
 This method returns a `Resource` instance for interacting with the `/v1/domains/ID_PLACEHOLDER` endpoint.
 
-### domainsIPs()
+### domainIPs()
 
 This method returns a `Resource` instance for interacting with the `/v1/domains/ID_PLACEHOLDER/ips` endpoint.
 
-### domainsReports()
+### domainReports()
 
 This method returns a `Resource` instance for interacting with the `/v1/domains/ID_PLACEHOLDER/reports` endpoint.
 
-### domainsRequests()
+### domainRequests()
 
 This method returns a `Resource` instance for interacting with the `/v1/domains/ID_PLACEHOLDER/requests` endpoint.
 
-### domainsRooms()
+### domainRooms()
 
 This method returns a `Resource` instance for interacting with the `/v1/domains/ID_PLACEHOLDER/rooms` endpoint.
 
-### domainsURLs()
+### domainURLs()
 
 This method returns a `Resource` instance for interacting with the `/v1/domains/ID_PLACEHOLDER/urls` endpoint.
 
@@ -297,11 +297,11 @@ This method returns a `Resource` instance for interacting with the `/v1/domains/
 
 This method returns a `Resource` instance for interacting with the `/v1/groups/ID_PLACEHOLDER` endpoint.
 
-### groupsBatch()
+### groupBatch()
 
 This method returns a `Resource` instance for interacting with the `/v1/groups/ID_PLACEHOLDER/batch` endpoint.
 
-### groupsCodes()
+### groupCodes()
 
 This method returns a `Resource` instance for interacting with the `/v1/groups/ID_PLACEHOLDER/codes` endpoint.
 
@@ -317,11 +317,11 @@ This method returns a `Resource` instance for interacting with the `/v1/reports/
 
 This method returns a `Resource` instance for interacting with the `/v1/rooms/ID_PLACEHOLDER` endpoint.
 
-### roomsReports()
+### roomReports()
 
 This method returns a `Resource` instance for interacting with the `/v1/rooms/ID_PLACEHOLDER/reports` endpoint.
 
-### roomsSessions()
+### roomSessions()
 
 This method returns a `Resource` instance for interacting with the `/v1/rooms/ID_PLACEHOLDER/sessions` endpoint.
 
