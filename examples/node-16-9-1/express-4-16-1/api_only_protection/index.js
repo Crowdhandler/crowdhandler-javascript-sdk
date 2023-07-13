@@ -15,7 +15,7 @@ const crowdHandlerMiddleware = async (req, res, next) => {
     const ch_gatekeeper = new crowdhandler.Gatekeeper(
       public_client,
       ch_context,
-      {publicKey: publicKey}
+      { publicKey: publicKey }
     );
 
     let decodedBody;
@@ -81,6 +81,18 @@ router.all("*", (req, res, next) => {
     if (res.locals.ch_gatekeeper) {
       res.locals.ch_gatekeeper.recordPerformance();
     }
+
+    /*
+     * IMPORTANT CONSIDERATION:
+     *
+     * The default status code sent to CrowdHandler is '200'. However, if a different status code needs to be sent,
+     * it can be achieved by passing it as a parameter to the 'recordPerformance' method.
+     *
+     * Example:
+     * chGatekeeper.recordPerformance({status: 404});
+     *
+     * If you are using CrowdHandler's autotune feature, is is crucial to pass accurate status codes to CrowdHandler to ensure the precision of analytics and autotune results.
+     */
   });
 });
 

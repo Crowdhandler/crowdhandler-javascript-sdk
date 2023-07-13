@@ -46,7 +46,7 @@ export class PrivateClient extends Client {
     });
   }
 
-  domainsIPs() {
+  domainIPs() {
     return new Resource(this.key, "/v1/domains/ID_PLACEHOLDER/ips", {
       timeout: this.timeout,
       debug: this.debug,
@@ -54,7 +54,7 @@ export class PrivateClient extends Client {
     });
   }
 
-  domainsReports() {
+  domainReports() {
     return new Resource(this.key, "/v1/domains/ID_PLACEHOLDER/reports", {
       timeout: this.timeout,
       debug: this.debug,
@@ -62,7 +62,7 @@ export class PrivateClient extends Client {
     });
   }
 
-  domainsRequests() {
+  domainRequests() {
     return new Resource(this.key, "/v1/domains/ID_PLACEHOLDER/requests", {
       timeout: this.timeout,
       debug: this.debug,
@@ -70,7 +70,7 @@ export class PrivateClient extends Client {
     });
   }
 
-  domainsRooms() {
+  domainRooms() {
     return new Resource(this.key, "/v1/domains/ID_PLACEHOLDER/rooms", {
       timeout: this.timeout,
       debug: this.debug,
@@ -78,7 +78,7 @@ export class PrivateClient extends Client {
     });
   }
 
-  domainsURLs() {
+  domainURLs() {
     return new Resource(this.key, "/v1/domains/ID_PLACEHOLDER/urls", {
       timeout: this.timeout,
       debug: this.debug,
@@ -94,7 +94,7 @@ export class PrivateClient extends Client {
     });
   }
 
-  groupsBatch() {
+  groupBatch() {
     return new Resource(this.key, "/v1/groups/ID_PLACEHOLDER/batch", {
       timeout: this.timeout,
       debug: this.debug,
@@ -102,7 +102,7 @@ export class PrivateClient extends Client {
     });
   }
 
-  groupsCodes() {
+  groupCodes() {
     return new Resource(this.key, "/v1/groups/ID_PLACEHOLDER/codes", {
       timeout: this.timeout,
       debug: this.debug,
@@ -134,7 +134,7 @@ export class PrivateClient extends Client {
     });
   }
 
-  roomsReports() {
+  roomReports() {
     return new Resource(this.key, "/v1/rooms/ID_PLACEHOLDER/reports", {
       timeout: this.timeout,
       debug: this.debug,
@@ -142,7 +142,7 @@ export class PrivateClient extends Client {
     });
   }
 
-  roomsSessions() {
+  roomSessions() {
     return new Resource(this.key, "/v1/rooms/ID_PLACEHOLDER/sessions", {
       timeout: this.timeout,
       debug: this.debug,
