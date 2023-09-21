@@ -9,6 +9,12 @@ Install and Require
     
     const crowdhandler = require("crowdhandler-sdk")
 
+Examples
+---------
+
+<https://github.com/Crowdhandler/crowdhandler-javascript-sdk/tree/main/examples>
+
+
 Instantiate a Public API client
 --------------------------------
 
@@ -332,13 +338,6 @@ This method returns a `Resource` instance for interacting with the `/v1/sessions
 ### templates()
 
 This method returns a `Resource` instance for interacting with the `/v1/templates/ID_PLACEHOLDER` endpoint.
-
-Putting it all together
-----------------------------
-
-See examples:
-
-<https://github.com/Crowdhandler/crowdhandler-javascript-sdk/tree/main/examples>
 
 
 More information
