@@ -21,7 +21,7 @@ See examples:
 Instantiate a Public API client
 --------------------------------
 
-    const public_clent = new crowdhandler.PublicClient (your_public_key, options)
+    const public_clent = new crowdhandler.PublicClient(your_public_key, options)
 
 **your_public_key**: string
     
