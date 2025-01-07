@@ -47,11 +47,11 @@ Instantiate Request Context
 
 **Express Framework Instantiation Example.**
 
-   `const ch_context = new crowdhandler.RequestContext(request: req, response: res)`
+   `const ch_context = new crowdhandler.RequestContext({request: req, response: res})`
    
 **Lambda@Edge Instantiation Example.**
     
-   `const ch_context = new crowdhandler.RequestContext(lambdaEvent: event)`
+   `const ch_context = new crowdhandler.RequestContext({lambdaEvent: event})`
 
 Instantiate a new GateKeeper object
 -----------------------------------
@@ -71,7 +71,7 @@ The GateKeeper class is a controller for interacting with the user request and t
 | publicKey | string | * | * | your_public_key |
 | privateKey | string | * | * | your_private_key * |
 
-* Required only if **mode: hybrid** set in options (see options.mode discussion found below)
+\* Required only if **mode: hybrid** set in options (see options.mode discussion found below)
 
 **options** : object (optional)
 
@@ -87,7 +87,7 @@ The GateKeeper class is a controller for interacting with the user request and t
 **Mode: Full - Instantiation Example.**
 
     //public_clent, ch_context, keys, options
-    const ch_gatekeeper = new crowdhandler.Gatekeeper(public_clent, ch_context, {publicKey: your_public_key}, {mode: full})
+    const ch_gatekeeper = new crowdhandler.Gatekeeper(public_clent, ch_context, {publicKey: your_public_key})
    
 **Mode: Hybrid - Instantiation Example.**
 
