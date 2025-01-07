@@ -6,7 +6,7 @@ const crowdhandler = require("crowdhandler-sdk");
 const crowdHandlerMiddleware = async (req, res, next) => {
   const publicKey = "YOUR_PUBLIC_KEY";
   const publicClient = new crowdhandler.PublicClient(publicKey);
-  const chContext = new crowdhandler.RequestContext(req, res);
+  const chContext = new crowdhandler.RequestContext({request: req, response: res});
   const chGatekeeper = new crowdhandler.Gatekeeper(publicClient, chContext, {
     publicKey: publicKey,
   });
