@@ -11,7 +11,7 @@ const crowdHandlerMiddleware = async (req, res, next) => {
   if (method === "POST" || method === "PUT") {
     const publicKey = "YOUR_PUBLIC_KEY";
     const public_client = new crowdhandler.PublicClient(publicKey);
-    const ch_context = new crowdhandler.RequestContext(req, res);
+    const ch_context = new crowdhandler.RequestContext({request: req, response: res});
     const ch_gatekeeper = new crowdhandler.Gatekeeper(
       public_client,
       ch_context,
