@@ -1,356 +1,647 @@
-CrowdHandler JS SDK
-====================
+# CrowdHandler JavaScript SDK
 
-JS SDK for interacting with CrowdHandler Public and Private APIs. Extensive functionality for checking and queuing users
+The official JavaScript SDK for [CrowdHandler](https://www.crowdhandler.com) waiting room and queue management. Works in both Node.js and browser environments.
 
-Install and Require
--------------------
+[![npm version](https://img.shields.io/npm/v/crowdhandler-sdk.svg)](https://www.npmjs.com/package/crowdhandler-sdk)
+[![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
 
-    npm i crowdhandler-sdk
+## Features
+
+- 🚀 **Easy Integration** - Add queue management to any JavaScript application with a single function call
+- 🌐 **Flexible Deployment** - Works in Node.js servers, browsers, serverless functions, and CDN edge locations
+- ⚡ **Performance Options** - Choose between real-time API validation or local signature validation based on your needs
+- 🔄 **Queue Continuity** - Maintains user position across page refreshes and sessions
+- 📘 **TypeScript Support** - Full type definitions for better development experience
+- 🔧 **API Access** - Manage waiting rooms, monitor queues, and access analytics programmatically
+
+## Installation
+
+### NPM
+
+```bash
+npm install crowdhandler-sdk
+```
+
+### CDN
+
+```html
+<!-- Load from unpkg -->
+<script src="https://unpkg.com/crowdhandler-sdk/dist/crowdhandler.umd.min.js"></script>
+
+<!-- Or specify a version -->
+<script src="https://unpkg.com/crowdhandler-sdk@2.0.0/dist/crowdhandler.umd.min.js"></script>
+```
+
+### Module Formats
+
+The SDK is available in multiple formats:
+
+- **ES Modules** - `import { init } from 'crowdhandler-sdk'`
+- **CommonJS** - `const crowdhandler = require('crowdhandler-sdk')`
+- **UMD** - Available as `window.crowdhandler` when loaded via script tag
+- **Dynamic Import** - `await import('crowdhandler-sdk')`
+
+## Quick Start
+
+### Node.js / Server-side
+
+```javascript
+const crowdhandler = require('crowdhandler-sdk');
+// or ES modules: import { init } from 'crowdhandler-sdk';
+
+// Initialize SDK
+const { client, gatekeeper } = crowdhandler.init({
+  publicKey: 'YOUR_PUBLIC_KEY',
+  // Optional: add privateKey for private API access
+  privateKey: 'YOUR_PRIVATE_KEY',
+  request: req,  // Express request object
+  response: res  // Express response object
+});
+
+// Validate the request
+const result = await gatekeeper.validateRequest();
+
+// Handle the validation result
+if (result.setCookie) {
+  gatekeeper.setCookie(result.cookieValue);
+}
+
+if (result.stripParams) {
+  return gatekeeper.redirectToCleanUrl(result.targetURL);
+}
+
+if (!result.promoted) {
+  return gatekeeper.redirectIfNotPromoted();
+}
+
+// User is promoted - continue with your application
+// ... your protected content here ...
+
+// Record performance (optional but recommended)
+await gatekeeper.recordPerformance();
+```
+
+### Browser / Client-side
+
+```javascript
+// Using script tag
+const { client, gatekeeper } = window.crowdhandler.init({
+  publicKey: 'YOUR_PUBLIC_KEY',
+  options: {
+    mode: 'clientside'
+  }
+});
+
+// Or using ES Modules
+import { init } from 'crowdhandler-sdk';
+const { client, gatekeeper } = init({
+  publicKey: 'YOUR_PUBLIC_KEY',
+  options: {
+    mode: 'clientside'
+  }
+});
+
+// Validate the request
+const result = await gatekeeper.validateRequest();
+
+// Handle the validation result
+if (result.setCookie) {
+  gatekeeper.setCookie(result.cookieValue);
+}
+
+if (result.stripParams) {
+  // Redirect to clean URL
+  window.location.href = result.targetURL;
+  return;
+}
+
+if (!result.promoted) {
+  // Redirect to waiting room
+  gatekeeper.redirectIfNotPromoted();
+  return;
+}
+
+// User is promoted - your application continues
+console.log('User granted access');
+
+// Record performance (optional but recommended)
+await gatekeeper.recordPerformance();
+```
+
+## Core Methods
+
+### gatekeeper.validateRequest()
+
+The primary method for validating requests against CrowdHandler's queue system. This method determines whether a user should be granted access to your protected resource or sent to a waiting room.
+
+```javascript
+const result = await gatekeeper.validateRequest();
+```
+
+**How it works:**
+
+1. **Token Check**: First checks for an existing CrowdHandler session token in cookies
+2. **API Validation**: Sends the token (or generates a new one) to CrowdHandler's API
+3. **Queue Position**: Determines if the user is promoted based on current capacity
+4. **Response**: Returns instructions on how to handle the request
+
+**Return Object:**
+
+```javascript
+{
+  promoted: boolean,      // true = grant access, false = send to waiting room
+  setCookie: boolean,     // true = update the user's session cookie
+  cookieValue: string,    // The session token to store in the cookie
+  stripParams: boolean,   // true = remove CrowdHandler URL parameters
+  targetURL: string,      // Where to redirect (clean URL or waiting room)
+  slug: string,           // The waiting room slug (when not promoted)
+  responseID: string,     // Response ID for performance tracking (when promoted)
+  deployment: string,     // Deployment identifier from the API
+  token: string,          // The session token
+  hash: string | null     // Signature hash for validation (when available)
+}
+```
+
+**Mode-Specific Behavior:**
+
+- **Full Mode** (default): Makes an API call on every request for real-time validation
+- **Hybrid Mode**: Validates signatures locally for promoted users, reducing API calls
+- **Clientside Mode**: Validates entirely in the browser using cookies
+
+**Error Handling:**
+
+```javascript
+try {
+  const result = await gatekeeper.validateRequest();
+  // ... handle result ...
+} catch (error) {
+  if (error.code === 'API_CONNECTION_FAILED') {
+    // Handle based on trustOnFail setting
+    // true = allow access, false = use fallback room
+  }
+}
+```
+
+### gatekeeper.setCookie(value)
+
+Sets the CrowdHandler session cookie. Always call this when `result.setCookie` is true to maintain the user's queue position.
+
+```javascript
+if (result.setCookie) {
+  gatekeeper.setCookie(result.cookieValue);
+}
+```
+
+### gatekeeper.redirectToCleanUrl(url)
+
+Removes CrowdHandler tracking parameters from URLs. Use when `result.stripParams` is true to keep URLs clean.
+
+```javascript
+if (result.stripParams) {
+  return gatekeeper.redirectToCleanUrl(result.targetURL);
+}
+```
+
+### gatekeeper.redirectIfNotPromoted()
+
+Convenience method that handles the complete redirect flow for non-promoted users. Automatically manages cookies and redirects.
+
+```javascript
+if (!result.promoted) {
+  return gatekeeper.redirectIfNotPromoted();
+}
+```
+
+### gatekeeper.recordPerformance(options?)
+
+Records performance metrics to help CrowdHandler optimize queue flow and capacity.
+
+```javascript
+// Simple usage (recommended)
+await gatekeeper.recordPerformance();
+
+// With custom options
+await gatekeeper.recordPerformance({
+  sample: 0.2,  // Sample 20% of requests
+  factor: 100   // Custom timing factor
+});
+```
+
+### gatekeeper.overrideWaitingRoomUrl(url)
+
+Overrides the default CrowdHandler waiting room with your custom URL.
+
+```javascript
+// Redirect to your custom queue page
+gatekeeper.overrideWaitingRoomUrl('https://mysite.com/custom-queue');
+```
+
+## Configuration
+
+### Initialization Options
+
+```javascript
+const instance = crowdhandler.init({
+  // Required
+  publicKey: 'YOUR_PUBLIC_KEY',
+  
+  // Optional
+  privateKey: 'YOUR_PRIVATE_KEY',  // Required for private API methods
+  
+  // Request context (choose one based on your environment)
+  request: req,           // Express/Node.js request
+  response: res,          // Express/Node.js response
+  lambdaEdgeEvent: event, // Lambda@Edge event
+  // (none)               // Browser environment (auto-detected)
+  
+  // Options
+  options: {
+    mode: 'full',         // 'full' (default), 'hybrid', 'clientside'
+    apiUrl: 'https://api.crowdhandler.com',  // Custom API endpoint
+    debug: false,         // Enable debug logging
+    timeout: 5000,        // API timeout in milliseconds
+    trustOnFail: true,    // Allow access if API fails
+    fallbackSlug: '',     // Fallback room slug when trustOnFail is false
+    cookieName: 'crowdhandler'  // Custom cookie name (default: 'crowdhandler')
+  }
+});
+```
+
+## Validation Modes
+
+### Full Mode (Default)
+Best for most server-side integrations.
+
+- ✅ **Pros**: Simple setup, no private key required, full features
+- ❌ **Cons**: API call on every request (20-100ms latency)
+
+### Hybrid Mode
+For performance-critical applications.
+
+- ✅ **Pros**: Minimal latency (2-10ms), fewer API calls
+- ❌ **Cons**: Requires private key, needs client-side JavaScript for auxilery functionality
+
+```javascript
+const instance = crowdhandler.init({
+  publicKey: 'YOUR_PUBLIC_KEY',
+  privateKey: 'YOUR_PRIVATE_KEY',  // Required for hybrid mode
+  options: { mode: 'hybrid' }
+});
+```
+
+### Clientside Mode
+For single-page applications and static sites.
+
+- ✅ **Pros**: Works without server, easy integration
+- ❌ **Cons**: Client-side only, requires JavaScript
+
+## Custom Cookie Name
+
+By default, CrowdHandler uses `crowdhandler` as the cookie name. You can override this with a custom name:
+
+```javascript
+const { gatekeeper } = crowdhandler.init({
+  publicKey: 'YOUR_PUBLIC_KEY',
+  options: {
+    cookieName: 'my-custom-queue'  // Use custom cookie name
+  }
+});
+```
+
+This is useful when:
+- Running multiple CrowdHandler instances on the same domain
+- Avoiding conflicts with existing cookies
+- Meeting specific naming conventions
+
+## API Client
+
+The SDK provides a unified client for both public and private APIs:
+
+```javascript
+// List all waiting rooms
+const rooms = await client.rooms().get();
+
+// Get specific room
+const room = await client.rooms().get('room_id');
+
+// Create a new room (requires privateKey)
+const newRoom = await client.rooms().post({
+  name: 'Product Launch',
+  domain: 'example.com'
+});
+
+// Update room settings
+await client.rooms().put('room_id', {
+  capacity: 1000
+});
+
+// Delete a room
+await client.rooms().delete('room_id');
+```
+
+### Available Resources
+
+**Public API** (publicKey only):
+- `client.requests()` - Request validation  
+- `client.responses()` - Response tracking
+- `client.rooms()` - Waiting room information
+
+**Private API** (requires privateKey):
+- `client.account()` - Account information
+- `client.accountPlan()` - Account plan details
+- `client.codes()` - Access code management
+- `client.domains()` - Domain configuration
+- `client.domainIPs()` - Domain IP addresses
+- `client.domainReports()` - Domain analytics
+- `client.domainRequests()` - Domain request logs
+- `client.domainRooms()` - Rooms for a domain
+- `client.domainURLs()` - Protected URLs
+- `client.groups()` - Access code groups
+- `client.groupBatch()` - Batch code operations
+- `client.groupCodes()` - Codes in a group
+- `client.ips()` - IP address management
+- `client.reports()` - Analytics reports
+- `client.rooms()` - Waiting room management
+- `client.roomReports()` - Room analytics
+- `client.roomSessions()` - Active room sessions
+- `client.sessions()` - Session management
+- `client.templates()` - Waiting room templates
+
+All methods support standard REST operations where applicable:
+- `.get()` - List all or get specific resource by ID
+- `.post(data)` - Create new resource
+- `.put(id, data)` - Update existing resource
+- `.patch(id, data)` - Partial update
+- `.delete(id)` - Delete resource
+
+Full API documentation with request/response examples is available in your [CrowdHandler dashboard](https://admin.crowdhandler.com) under Account → API.
+
+## Error Handling
+
+All SDK errors are instances of `CrowdHandlerError` with helpful context:
+
+```javascript
+try {
+  const rooms = await client.rooms().get();
+} catch (error) {
+  console.error(error.code);       // 'ROOM_NOT_FOUND'
+  console.error(error.message);    // Human-readable message
+  console.error(error.suggestion); // Helpful next steps
+  console.error(error.statusCode); // HTTP status code
+}
+```
+
+### Error Codes
+
+- `INVALID_CONFIG` - Invalid SDK configuration
+- `MISSING_PRIVATE_KEY` - Private key required for this operation
+- `API_CONNECTION_FAILED` - Cannot reach CrowdHandler API
+- `RESOURCE_NOT_FOUND` - Requested resource doesn't exist
+- `RATE_LIMITED` - Too many requests
+- Plus more specific error codes
+
+## Integration Examples
+
+See the [examples directory](https://github.com/Crowdhandler/crowdhandler-javascript-sdk/tree/main/examples) for complete working examples including:
+- Express.js implementations (full protection, API-only, private API)
+- Lambda@Edge handlers  
+- React integration
+- Error handling patterns
+- TypeScript usage
+
+### Express.js
+
+```javascript
+const express = require('express');
+const crowdhandler = require('crowdhandler-sdk');
+
+const app = express();
+
+// Middleware to protect routes
+async function protectRoute(req, res, next) {
+  try {
+    const { gatekeeper } = crowdhandler.init({
+      publicKey: process.env.CROWDHANDLER_PUBLIC_KEY,
+      request: req,
+      response: res
+    });
+
+    const result = await gatekeeper.validateRequest();
     
-    const crowdhandler = require("crowdhandler-sdk")
-
-Integration Examples
-----------------------------
-
-See examples:
-
-<https://github.com/Crowdhandler/crowdhandler-javascript-sdk/tree/main/examples>
-
-
-Instantiate a Public API client
---------------------------------
-
-    const public_clent = new crowdhandler.PublicClient(your_public_key, options)
-
-**your_public_key**: string
-    
-**options** : object (optional)
-
-| Option | Type | Default | Values | Explanation |
-| ------ | ---- | ------- | ------ | ----------- |
-| api_url | string | https://api.crowdhandler.com | * | API endpoint. |
-| debug | string | false | false/true | Outputs debugging information. |
-| timeout | integer | 5000 | 1 - 30000 | Outbound API communication timeout in milliseconds. | 
-
-
-Instantiate Request Context
---------------------------------
-
-    const ch_context = new crowdhandler.RequestContext(options)
-    
-| Option | Type | Default | Values | Explanation |
-| ------ | ---- | ------- | ------ | ----------- |
-| request | object | * | * | Node.JS http.IncomingMessage derived request object |
-| response | object | * | * | Node.JS http.ServerResponse derived response object |
-| lambdaEvent | object | * | * | Lambda@Edge compatible event. |
-
-**Express Framework Instantiation Example.**
-
-   `const ch_context = new crowdhandler.RequestContext({request: req, response: res})`
-   
-**Lambda@Edge Instantiation Example.**
-    
-   `const ch_context = new crowdhandler.RequestContext({lambdaEvent: event})`
-
-Instantiate a new GateKeeper object
------------------------------------
-
-The GateKeeper class is a controller for interacting with the user request and the CrowdHandler API and taking appropriate action.
-
-    const ch_gatekeeper = new crowdhandler.Gatekeeper(public_client, ch_context, keys, options)
-
-**public_client**: Object
-
-**ch_context**: Object
-
-**keys**: Object
-
-| Option | Type | Default | Values | Explanation |
-| ------ | ---- | ------- | ------ | ----------- |
-| publicKey | string | * | * | your_public_key |
-| privateKey | string | * | * | your_private_key * |
-
-\* Required only if **mode: hybrid** set in options (see options.mode discussion found below)
-
-**options** : object (optional)
-
-
-| Option | Type | Default | Values | Explanation |
-| ------ | ---- | ------- | ------ | ----------- |
-| debug | boolean | false | false, true | Outputs debugging information. |
-| fallbackSlug | string | "" | * | Used in combination with setting trustOnFail = false, specifying a specific safety net waiting room to be used in the event of a communications failure. |
-| mode | string | full | full, hybrid, clientside | Validation method. See below for more information on choosing a mode. |
-| timeout | integer | 5000 | 1 - 30000 | Outbound API communication timeout in milliseconds. | 
-| trustOnFail | boolean | true | false, true | If false, if an API call fails, or a malformed response is received, you will be redirected to CrowdHandler's ultimate catch-all waiting room until the API responds with more inforamtion. |
-
-**Mode: Full - Instantiation Example.**
-
-    //public_clent, ch_context, keys, options
-    const ch_gatekeeper = new crowdhandler.Gatekeeper(public_clent, ch_context, {publicKey: your_public_key})
-   
-**Mode: Hybrid - Instantiation Example.**
-
-    //public_clent, ch_context, keys, options
-    const ch_gatekeeper = new crowdhandler.Gatekeeper(public_clent, ch_context, {publicKey: your_public_key, privateKey: your_private_key}, {mode: hybrid})
-    
-options.mode
--------
-
-Choosing the correct mode option is dependent on how/where you are integrating CrowdHandler. See below for for some general guidance. 
-If in doubt, reach out to support@crowhandler.com.
-
-`full` (default)
-
-Suitable for most server-side integrations. 
-
-***Pros***:
-
-* Fully featured out of the box.
-* Does not require suplimentary Javascript integration to enable autotune feature. 
-* No private key required.
-
-***Cons***: 
-
-* Checks in with CrowdHandler API on every protected request.
-* 20-100ms (depending on geo-location) of processing time added to requests accessing protected URLs. 
-
-`hybrid`
-
-When every millisecond counts.
-
-***Pros***:
-
-* Uses known signature method to significantly reduce the need for CrowdHandler API calls. 
-* Only 2-10ms of processing time added to majority of requests. 
-* Offloads none mission critical processes to browser.
-
-***Cons***: 
-
-* Requires additional installation of CrowdHandler's clientside Javascript (https://support.crowdhandler.com/support/solutions/articles/80000274028-javascript-integration-installing)
-* Gatekeeper requires private key. 
-
-`clientside`
-
-Suitable for clientside only frameworks such as React.
-
-
-Gatekeeper Overrides
--------
-
-#### Override Host
-
-    ch_gatekeeper.overrideHost(host: string)
-    
-By default host is inferred from the RequestContext class. 
-
-#### Override Path
-
-     ch_gatekeeper.overridePath(path: string)
-    
-By default path is inferred from the RequestContext class. 
-    
-
-#### Override IP Address   
-
-    ch_gatekeeper.overrideIP(ip: string) 
-    
-Tracking the user's IP should be a simple thing, but in load-balanced or cloud hosting environments, sometimes you'll get the IP of the load balancer instead of the IP of the user. 
-
-GateKeeper tries common patterns to detect the IP, including common load balancer patterns, but you can ovverride what it detects by setting explicitly if your setup is more exotic. It's important to track the IP accurately. If the same user is tracked via two IPs they could be blocked erroneously, or simultaneously blocked and not-blocked, depending upon whether they are waiting or transacting. 
-
-#### Override Language
-
-    ch_gatekeeper.overrideLang(lang: string) 
-    
-By default language is inferred from the accept-language header processed in the RequestContext class. 
-
-#### Override User Agent
-
-    ch_gatekeeper.overrideUserAgent(agent: string) 
-    
-By default user agent is inferred from the user-agent header processed in the RequestContext class. 
-
-#### Override Cookie
-
-    ch_gatekeeper.overrideCookie(cookie: Array<string>)
-    
-Override the cookie supplied in the request context.
-
-#### Override Ignore Pattern
-
-    ch_gatekeeper.setIgnoreUrls(regExp: RegExp) 
-    
-    Default: /^((?!.*\?).*(\.(avi|css|eot|gif|ico|jpg|jpeg|js|json|mov|mp4|mpeg|mpg|og[g|v]|pdf|png|svg|ttf|txt|wmv|woff|woff2|xml))$)/;
-    
-By default, common assets (png jpg etc) will be excluded from API checks, receiving automatic promotion. 
-If you want you can pass your own regular expression. This will *override* the existing RegExp, so you will need to incorporate assets if necessary.
-
-
-Request Validation
--------------------------
-    
-    const ch_status = ch_gatekeeper.validateRequest();
-    
-This is the heart of the class. It looks at the user's request, checks in with the API (or their signature if options.mode = "hybrid") and retrieves a result that indicates whether the user should be granted access or be sent to a waiting room. 
-
-Set the cookie
---------------
-
-    if (ch_status.setCookie) {
-        ch_gatekeeper.setCookie(ch_status.cookieValue)
+    if (result.setCookie) {
+      gatekeeper.setCookie(result.cookieValue);
     }
-
-
-Strip CrowdHandler parameters
------------------------------
-
-After users are redirected from the waiting room to your application, CrowdHandler appends information to the URL query string which is used to manage state.
-
-    if (ch_status.stripParams) {
-        ch_gatekeeper.setCookie(ch_status.targetURL)
-    }
-
-Redirect the user if they should wait
--------------------------------------
     
-If this user should be waiting, they will be sent to the correct waiting room.
-
-    if (!ch_status.promoted) {
-        ch_gatekeeper.redirectIfNotPromoted()
+    if (result.stripParams) {
+      return gatekeeper.redirectToCleanUrl(result.targetURL);
     }
     
-Record page load performance
-----------------------------
-
-This should be done last, after your application has completed all actions i.e. rendered the page. 
-        
-    ch_gatekeeper.recordPerfomance()
+    if (!result.promoted) {
+      return gatekeeper.redirectIfNotPromoted();
+    }
     
-You can override the class inferred performance metrics and provide your own if you don't want to rely on the Gatekeeper class to set them. See Lambda@Edge integration example for a fleshed out implementation approach.
+    // User is promoted, continue
+    res.locals.gatekeeper = gatekeeper;
+    next();
+  } catch (error) {
+    console.error('CrowdHandler error:', error);
+    // Decide whether to block or allow on error
+    next();
+  }
+}
 
-    ch_gatekeeper.recordPerfomance(overrideElapsed: elapsed, responseID: responseID, sample: 1, statusCode: 200)
+// Protect specific routes
+app.get('/limited-product', protectRoute, (req, res) => {
+  res.send('This is a limited product page!');
+  
+  // Record performance after response
+  if (res.locals.gatekeeper) {
+    res.locals.gatekeeper.recordPerformance();
+  }
+});
+```
 
-| Option | Type | Default | Values | Explanation |
-| ------ | ---- | ------- | ------ | ----------- |
-| overrideElapsed | integer | * | Date.now() | Milliseconds elapsed since the Unix epoch. |
-| responseID | string | * | * | responseID value derived from CrowdHandler /requests/* API response. |
-| sample | number | 0.2 | 0-1 | Percentage of requests to submit for performance recording. |
-| statusCode | integer | 200 | 2xx-5xx | Status code that associated with the request. |
+### Lambda@Edge
 
+```javascript
+const crowdhandler = require('crowdhandler-sdk');
 
-# PrivateClient
+exports.handler = async (event) => {
+  const { gatekeeper } = crowdhandler.init({
+    publicKey: process.env.CROWDHANDLER_PUBLIC_KEY,
+    lambdaEdgeEvent: event
+  });
 
-`PrivateClient` is a class extending `Client` which serves as the main entry point for interacting with private CrowdHandler API methods. It requires a private API key for instantiation which can be found in the CrowdHandler control panel. 
+  const result = await gatekeeper.validateRequest();
+  
+  if (!result.promoted) {
+    // Redirect to waiting room
+    return {
+      status: '302',
+      statusDescription: 'Found',
+      headers: {
+        location: [{
+          key: 'Location',
+          value: result.targetURL
+        }]
+      }
+    };
+  }
+  
+  // Continue with normal request processing
+  return event.Records[0].cf.request;
+};
+```
 
-## Instantiate a Private API Client
+### React / Next.js
 
-    const private_clent = new crowdhandler.PrivateClient (your_private_key, options)
+```javascript
+import { useEffect, useState } from 'react';
+import { init } from 'crowdhandler-sdk';
 
-**your_public_key**: string
+function ProtectedComponent() {
+  const [isPromoted, setIsPromoted] = useState(null);
+  
+  useEffect(() => {
+    const checkAccess = async () => {
+      const { gatekeeper } = init({
+        publicKey: 'YOUR_PUBLIC_KEY',
+        options: { mode: 'clientside' }
+      });
+      
+      const result = await gatekeeper.validateRequest();
+      
+      if (!result.promoted) {
+        window.location.href = result.targetURL;
+      } else {
+        setIsPromoted(true);
+      }
+    };
     
-**options** : object (optional)
+    checkAccess();
+  }, []);
+  
+  if (isPromoted === null) return <div>Checking access...</div>;
+  if (!isPromoted) return <div>Redirecting to waiting room...</div>;
+  
+  return <div>Protected content here!</div>;
+}
+```
 
-| Option | Type | Default | Values | Explanation |
-| ------ | ---- | ------- | ------ | ----------- |
-| api_url | string | https://api.crowdhandler.com | * | API endpoint. |
-| debug | string | false | false/true | Outputs debugging information. |
-| timeout | integer | 5000 | 1 - 30000 | Outbound API communication timeout in milliseconds. | 
+## Advanced Features
+
+### Override Waiting Room URL
+
+```javascript
+gatekeeper.overrideWaitingRoomUrl('https://custom-wait.example.com');
+```
+
+### Custom Ignore Patterns
+
+```javascript
+// Don't check these paths
+gatekeeper.setIgnoreUrls(/\.(css|js|png|jpg)$/);
+```
+
+### Override Request Details
+
+```javascript
+gatekeeper.overrideHost('example.com');
+gatekeeper.overridePath('/special-path');
+gatekeeper.overrideIP('203.0.113.0');
+gatekeeper.overrideLang('en-US');
+gatekeeper.overrideUserAgent('Custom Bot 1.0');
+```
+
+### Performance Recording
+
+```javascript
+// Basic usage (records automatically)
+await gatekeeper.recordPerformance();
+
+// With options
+await gatekeeper.recordPerformance({
+  sample: 1.0,           // Record 100% of requests (default 0.2)
+  statusCode: 200,       // HTTP status code
+  overrideElapsed: 1234  // Custom timing in ms
+});
+```
+
+## Testing
+
+The SDK includes comprehensive testing tools:
+
+### Local Test Server
+
+```bash
+# Start test server with your keys
+npm run test:server -- --publicKey=YOUR_KEY --privateKey=YOUR_PRIVATE_KEY
+
+# With custom options
+npm run test:server -- --apiUrl=https://staging-api.crowdhandler.com --mode=hybrid
+
+# Development mode (auto-rebuilds SDK)
+npm run test:server:dev
+```
+
+### Browser Test Page
+
+1. Start the test server
+2. Open http://localhost:3000/test/browser-test.html
+3. Interactive testing with real API integration
+
+### Test Client
+
+```bash
+# Run automated tests against test server
+npm run test:client
+```
+
+## TypeScript Support
+
+Full TypeScript support with type definitions included:
+
+```typescript
+import { init, CrowdHandlerError, ErrorCodes } from 'crowdhandler-sdk';
+import type { Mode, Room, Domain, ValidationResult } from 'crowdhandler-sdk';
+
+// All types are properly inferred
+const { client, gatekeeper } = init({
+  publicKey: 'YOUR_KEY'
+});
+
+// TypeScript knows this returns Room[]
+const rooms = await client.rooms().get();
+
+// Error handling with types
+try {
+  await client.domains().get();
+} catch (error) {
+  if (error instanceof CrowdHandlerError) {
+    if (error.code === ErrorCodes.MISSING_PRIVATE_KEY) {
+      // Handle missing key
+    }
+  }
+}
+```
+
+## Build Information
+
+The SDK is distributed in multiple formats:
+
+- **CommonJS** (`dist/crowdhandler.cjs.js`) - For Node.js `require()`
+- **ES Modules** (`dist/crowdhandler.esm.js`) - For modern `import`
+- **UMD** (`dist/crowdhandler.umd.js`) - For browsers via `<script>`
+- **UMD Minified** (`dist/crowdhandler.umd.min.js`) - Production browser build
 
 
-## Methods
+## Support
 
-All methods return a new `Resource` instance for interacting with a specific endpoint of the API.
+- 📚 [Knowledge Base](https://www.crowdhandler.com/support)
+- 📖 [API Documentation](https://admin.crowdhandler.com/account/api)
+- 💬 [Email Support](mailto:support@crowdhandler.com)
+- 🐛 [Report Issues](https://github.com/Crowdhandler/crowdhandler-javascript-sdk/issues)
 
-**Note1**: Full API documentation containing response examples, required parameter fields and more can be found in your control panel. Navigate to **account** -> **api**. 
+## License
 
-**Note2**: In all the methods below, the `ID_PLACEHOLDER` is a placeholder for the actual id required by the specific API endpoint. It should be replaced by the actual id before making the API call.
-
-### account()
-
-This method returns a `Resource` instance for interacting with the `/v1/account/` endpoint.
-
-### accountPlan()
-
-This method returns a `Resource` instance for interacting with the `/v1/account/plan` endpoint.
-
-### codes()
-
-This method returns a `Resource` instance for interacting with the `/v1/codes/ID_PLACEHOLDER` endpoint.
-
-### domains()
-
-This method returns a `Resource` instance for interacting with the `/v1/domains/ID_PLACEHOLDER` endpoint.
-
-### domainIPs()
-
-This method returns a `Resource` instance for interacting with the `/v1/domains/ID_PLACEHOLDER/ips` endpoint.
-
-### domainReports()
-
-This method returns a `Resource` instance for interacting with the `/v1/domains/ID_PLACEHOLDER/reports` endpoint.
-
-### domainRequests()
-
-This method returns a `Resource` instance for interacting with the `/v1/domains/ID_PLACEHOLDER/requests` endpoint.
-
-### domainRooms()
-
-This method returns a `Resource` instance for interacting with the `/v1/domains/ID_PLACEHOLDER/rooms` endpoint.
-
-### domainURLs()
-
-This method returns a `Resource` instance for interacting with the `/v1/domains/ID_PLACEHOLDER/urls` endpoint.
-
-### groups()
-
-This method returns a `Resource` instance for interacting with the `/v1/groups/ID_PLACEHOLDER` endpoint.
-
-### groupBatch()
-
-This method returns a `Resource` instance for interacting with the `/v1/groups/ID_PLACEHOLDER/batch` endpoint.
-
-### groupCodes()
-
-This method returns a `Resource` instance for interacting with the `/v1/groups/ID_PLACEHOLDER/codes` endpoint.
-
-### ips()
-
-This method returns a `Resource` instance for interacting with the `/v1/ips/ID_PLACEHOLDER` endpoint.
-
-### reports()
-
-This method returns a `Resource` instance for interacting with the `/v1/reports/ID_PLACEHOLDER` endpoint.
-
-### rooms()
-
-This method returns a `Resource` instance for interacting with the `/v1/rooms/ID_PLACEHOLDER` endpoint.
-
-### roomReports()
-
-This method returns a `Resource` instance for interacting with the `/v1/rooms/ID_PLACEHOLDER/reports` endpoint.
-
-### roomSessions()
-
-This method returns a `Resource` instance for interacting with the `/v1/rooms/ID_PLACEHOLDER/sessions` endpoint.
-
-### sessions()
-
-This method returns a `Resource` instance for interacting with the `/v1/sessions/ID_PLACEHOLDER` endpoint.
-
-### templates()
-
-This method returns a `Resource` instance for interacting with the `/v1/templates/ID_PLACEHOLDER` endpoint.
-
-
-More information
-----------------
-
-#### Knowledge base and API
-
-https://www.crowdhandler.com/support
-
-#### email
-
-support@crowdhandler.com
-
+BSD 3-Clause License - see LICENSE file for details.

@@ -4,30 +4,29 @@ const crowdhandler = require("crowdhandler-sdk");
 
 // Middleware to handle CrowdHandler logic
 const crowdHandlerMiddleware = async (req, res, next) => {
-  const publicKey = "YOUR_PUBLIC_KEY";
-  const publicClient = new crowdhandler.PublicClient(publicKey);
-  const chContext = new crowdhandler.RequestContext({request: req, response: res});
-  const chGatekeeper = new crowdhandler.Gatekeeper(publicClient, chContext, {
-    publicKey: publicKey,
+  const { gatekeeper } = crowdhandler.init({
+    publicKey: "YOUR_PUBLIC_KEY",
+    request: req,
+    response: res
   });
 
   try {
-    const chStatus = await chGatekeeper.validateRequest();
+    const chStatus = await gatekeeper.validateRequest();
 
     if (chStatus.setCookie) {
-      chGatekeeper.setCookie(chStatus.cookieValue);
+      gatekeeper.setCookie(chStatus.cookieValue);
     }
 
     if (chStatus.stripParams) {
-      chGatekeeper.redirectToCleanUrl(chStatus.targetURL);
+      gatekeeper.redirectToCleanUrl(chStatus.targetURL);
     }
 
     if (!chStatus.promoted) {
-      return chGatekeeper.redirectIfNotPromoted();
+      return gatekeeper.redirectIfNotPromoted();
     }
 
-    // If the request is promoted, save the chGatekeeper instance in res.locals for later use
-    res.locals.chGatekeeper = chGatekeeper;
+    // If the request is promoted, save the gatekeeper instance in res.locals for later use
+    res.locals.gatekeeper = gatekeeper;
 
     // Continue to the next middleware or route handler
     next();
@@ -54,8 +53,8 @@ router.get("*", (req, res, next) => {
     res.send(html);
 
     // Don't forget to log performance data with CrowdHandler. This is used for reporting and the autotune feature.
-    if (res.locals.chGatekeeper) {
-      res.locals.chGatekeeper.recordPerformance();
+    if (res.locals.gatekeeper) {
+      res.locals.gatekeeper.recordPerformance();
     }
 
     /*
@@ -65,7 +64,7 @@ router.get("*", (req, res, next) => {
      * it can be achieved by passing it as a parameter to the 'recordPerformance' method.
      *
      * Example:
-     * chGatekeeper.recordPerformance({status: 404});
+     * gatekeeper.recordPerformance({status: 404});
      *
      * If you are using CrowdHandler's autotune feature, is is crucial to pass accurate status codes to CrowdHandler to ensure the precision of analytics and autotune results.
      */

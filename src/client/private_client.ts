@@ -1,24 +1,24 @@
-import { Client } from "./client";
+import { BaseClient } from "./base_client";
 import { Resource } from "./resource";
 
-export class PrivateClient extends Client {
+export class PrivateClient extends BaseClient {
   constructor(
     key: string,
-    options: { timeout?: number; debug?: boolean; api_url?: string } = {}
+    options: { timeout?: number; debug?: boolean; apiUrl?: string } = {}
   ) {
     const {
       timeout = 5000,
       debug = false,
-      api_url = "https://api.crowdhandler.com",
+      apiUrl = "https://api.crowdhandler.com",
     } = options ?? {};
-    super(api_url, key, options);
+    super(apiUrl, key, options);
   }
 
   account() {
     return new Resource(this.key, "/v1/account/", {
       timeout: this.timeout,
       debug: this.debug,
-      api_url: this.api_url,
+      apiUrl: this.apiUrl,
     });
   }
 
@@ -26,7 +26,7 @@ export class PrivateClient extends Client {
     return new Resource(this.key, "/v1/account/plan", {
       timeout: this.timeout,
       debug: this.debug,
-      api_url: this.api_url,
+      apiUrl: this.apiUrl,
     });
   }
 
@@ -34,7 +34,7 @@ export class PrivateClient extends Client {
     return new Resource(this.key, "/v1/codes/ID_PLACEHOLDER", {
       timeout: this.timeout,
       debug: this.debug,
-      api_url: this.api_url,
+      apiUrl: this.apiUrl,
     });
   }
 
@@ -42,7 +42,7 @@ export class PrivateClient extends Client {
     return new Resource(this.key, "/v1/domains/ID_PLACEHOLDER", {
       timeout: this.timeout,
       debug: this.debug,
-      api_url: this.api_url,
+      apiUrl: this.apiUrl,
     });
   }
 
@@ -50,7 +50,7 @@ export class PrivateClient extends Client {
     return new Resource(this.key, "/v1/domains/ID_PLACEHOLDER/ips", {
       timeout: this.timeout,
       debug: this.debug,
-      api_url: this.api_url,
+      apiUrl: this.apiUrl,
     });
   }
 
@@ -58,7 +58,7 @@ export class PrivateClient extends Client {
     return new Resource(this.key, "/v1/domains/ID_PLACEHOLDER/reports", {
       timeout: this.timeout,
       debug: this.debug,
-      api_url: this.api_url,
+      apiUrl: this.apiUrl,
     });
   }
 
@@ -66,7 +66,7 @@ export class PrivateClient extends Client {
     return new Resource(this.key, "/v1/domains/ID_PLACEHOLDER/requests", {
       timeout: this.timeout,
       debug: this.debug,
-      api_url: this.api_url,
+      apiUrl: this.apiUrl,
     });
   }
 
@@ -74,7 +74,7 @@ export class PrivateClient extends Client {
     return new Resource(this.key, "/v1/domains/ID_PLACEHOLDER/rooms", {
       timeout: this.timeout,
       debug: this.debug,
-      api_url: this.api_url,
+      apiUrl: this.apiUrl,
     });
   }
 
@@ -82,7 +82,7 @@ export class PrivateClient extends Client {
     return new Resource(this.key, "/v1/domains/ID_PLACEHOLDER/urls", {
       timeout: this.timeout,
       debug: this.debug,
-      api_url: this.api_url,
+      apiUrl: this.apiUrl,
     });
   }
 
@@ -90,7 +90,7 @@ export class PrivateClient extends Client {
     return new Resource(this.key, "/v1/groups/ID_PLACEHOLDER", {
       timeout: this.timeout,
       debug: this.debug,
-      api_url: this.api_url,
+      apiUrl: this.apiUrl,
     });
   }
 
@@ -98,7 +98,7 @@ export class PrivateClient extends Client {
     return new Resource(this.key, "/v1/groups/ID_PLACEHOLDER/batch", {
       timeout: this.timeout,
       debug: this.debug,
-      api_url: this.api_url,
+      apiUrl: this.apiUrl,
     });
   }
 
@@ -106,7 +106,7 @@ export class PrivateClient extends Client {
     return new Resource(this.key, "/v1/groups/ID_PLACEHOLDER/codes", {
       timeout: this.timeout,
       debug: this.debug,
-      api_url: this.api_url,
+      apiUrl: this.apiUrl,
     });
   }
 
@@ -114,7 +114,7 @@ export class PrivateClient extends Client {
     return new Resource(this.key, "/v1/ips/ID_PLACEHOLDER", {
       timeout: this.timeout,
       debug: this.debug,
-      api_url: this.api_url,
+      apiUrl: this.apiUrl,
     });
   }
 
@@ -122,7 +122,7 @@ export class PrivateClient extends Client {
     return new Resource(this.key, "/v1/reports/ID_PLACEHOLDER", {
       timeout: this.timeout,
       debug: this.debug,
-      api_url: this.api_url,
+      apiUrl: this.apiUrl,
     });
   }
 
@@ -130,7 +130,7 @@ export class PrivateClient extends Client {
     return new Resource(this.key, "/v1/rooms/ID_PLACEHOLDER", {
       timeout: this.timeout,
       debug: this.debug,
-      api_url: this.api_url,
+      apiUrl: this.apiUrl,
     });
   }
 
@@ -138,7 +138,7 @@ export class PrivateClient extends Client {
     return new Resource(this.key, "/v1/rooms/ID_PLACEHOLDER/reports", {
       timeout: this.timeout,
       debug: this.debug,
-      api_url: this.api_url,
+      apiUrl: this.apiUrl,
     });
   }
 
@@ -146,7 +146,7 @@ export class PrivateClient extends Client {
     return new Resource(this.key, "/v1/rooms/ID_PLACEHOLDER/sessions", {
       timeout: this.timeout,
       debug: this.debug,
-      api_url: this.api_url,
+      apiUrl: this.apiUrl,
     });
   }
 
@@ -154,7 +154,7 @@ export class PrivateClient extends Client {
     return new Resource(this.key, "/v1/sessions/ID_PLACEHOLDER", {
       timeout: this.timeout,
       debug: this.debug,
-      api_url: this.api_url,
+      apiUrl: this.apiUrl,
     });
   }
 
@@ -162,7 +162,7 @@ export class PrivateClient extends Client {
     return new Resource(this.key, "/v1/templates/ID_PLACEHOLDER", {
       timeout: this.timeout,
       debug: this.debug,
-      api_url: this.api_url,
+      apiUrl: this.apiUrl,
     });
   }
 }

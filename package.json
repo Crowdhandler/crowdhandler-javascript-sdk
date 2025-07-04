@@ -1,6 +1,6 @@
 {
   "name": "crowdhandler-sdk",
-  "version": "1.0.2",
+  "version": "2.0.2",
   "description": "",
   "homepage": "https://www.crowdhandler.com",
   "repository": {
@@ -10,20 +10,42 @@
   "files": [
     "dist/**"
   ],
-  "main": "dist/index.js",
+  "main": "dist/crowdhandler.cjs.js",
+  "module": "dist/crowdhandler.esm.js",
+  "browser": "dist/crowdhandler.umd.js",
+  "types": "dist/types/index.d.ts",
   "scripts": {
-    "build": "tsc &&  madge --circular --extensions ts src/ ",
+    "build": "npm run build:clean && npm run build:rollup && npm run build:legacy && npm run check:circular",
+    "build:clean": "rm -rf dist",
+    "build:rollup": "rollup -c",
+    "build:legacy": "tsc",
+    "check:circular": "madge --circular --extensions ts src/",
     "publish": "npm run build && npm publish --access public",
     "test": "jest --coverage",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "test:server": "node test/local-server/server.js",
+    "test:server:dev": "npm run build && node test/local-server/server.js",
+    "test:client": "node test/local-server/test-client.js",
+    "test:local": "npm run build && npm run test:server & sleep 2 && npm run test:client"
   },
   "author": "",
-  "license": "ISC",
+  "license": "BSD-3-Clause",
   "devDependencies": {
     "@babel/preset-env": "^7.18.10",
+    "@rollup/plugin-alias": "^5.1.1",
+    "@rollup/plugin-commonjs": "^28.0.6",
+    "@rollup/plugin-json": "^6.1.0",
+    "@rollup/plugin-node-resolve": "^16.0.1",
+    "@rollup/plugin-replace": "^6.0.2",
+    "@rollup/plugin-terser": "^0.4.4",
+    "@rollup/plugin-typescript": "^12.1.3",
     "babel-jest": "^28.1.3",
+    "cookie-parser": "^1.4.7",
+    "express": "^5.1.0",
     "jest": "^28.1.3",
+    "madge": "^5.0.2",
     "node-mocks-http": "^1.12.1",
+    "rollup": "^2.79.2",
     "ts-jest": "^28.0.7",
     "ts-loader": "^9.4.2",
     "typescript": "^4.7.4"
@@ -33,6 +55,7 @@
     "axios": "^0.27.2",
     "js-sha256": "^0.9.0",
     "query-string": "^7.1.3",
+    "regenerator-runtime": "^0.14.1",
     "zod": "^3.21.4"
   }
 }

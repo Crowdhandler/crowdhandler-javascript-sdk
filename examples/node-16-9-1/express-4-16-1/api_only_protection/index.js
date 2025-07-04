@@ -9,14 +9,11 @@ const crowdHandlerMiddleware = async (req, res, next) => {
 
   // Check if the request method is POST or PUT
   if (method === "POST" || method === "PUT") {
-    const publicKey = "YOUR_PUBLIC_KEY";
-    const public_client = new crowdhandler.PublicClient(publicKey);
-    const ch_context = new crowdhandler.RequestContext({request: req, response: res});
-    const ch_gatekeeper = new crowdhandler.Gatekeeper(
-      public_client,
-      ch_context,
-      { publicKey: publicKey }
-    );
+    const { gatekeeper } = crowdhandler.init({
+      publicKey: "YOUR_PUBLIC_KEY",
+      request: req,
+      response: res
+    });
 
     let decodedBody;
     let chToken;
@@ -34,12 +31,12 @@ const crowdHandlerMiddleware = async (req, res, next) => {
         let temporaryPath = url.pathname;
 
         // Override the gatekeeper host and path with the sourceURL
-        ch_gatekeeper.overrideHost(temporaryHost);
-        ch_gatekeeper.overridePath(temporaryPath);
+        gatekeeper.overrideHost(temporaryHost);
+        gatekeeper.overridePath(temporaryPath);
 
         // If there's a token in the body, provide gatekeeper with a pseudo cookie
         if (chToken) {
-          ch_gatekeeper.overrideCookie(`crowdhandler=${chToken}`);
+          gatekeeper.overrideCookie(`crowdhandler=${chToken}`);
         }
       } catch (error) {
         console.error("Error parsing JSON:", error);
@@ -47,15 +44,15 @@ const crowdHandlerMiddleware = async (req, res, next) => {
       }
     }
 
-    const ch_status = await ch_gatekeeper.validateRequest();
+    const ch_status = await gatekeeper.validateRequest();
 
     // If the request is not promoted, send a 403 Forbidden response and do not proceed to the next middleware
     if (!ch_status.promoted) {
       res.status(403).send("Forbidden");
       return;
     } else {
-      // If the request is promoted, save the ch_gatekeeper instance in res.locals for later use
-      res.locals.ch_gatekeeper = ch_gatekeeper;
+      // If the request is promoted, save the gatekeeper instance in res.locals for later use
+      res.locals.gatekeeper = gatekeeper;
     }
   }
   // Continue to the next middleware or route handler
@@ -77,9 +74,9 @@ router.all("*", (req, res, next) => {
     // Send the rendered HTML to the client
     res.send(html);
 
-    // If the ch_gatekeeper instance exists in res.locals, record the performance
-    if (res.locals.ch_gatekeeper) {
-      res.locals.ch_gatekeeper.recordPerformance();
+    // If the gatekeeper instance exists in res.locals, record the performance
+    if (res.locals.gatekeeper) {
+      res.locals.gatekeeper.recordPerformance();
     }
 
     /*
@@ -89,7 +86,7 @@ router.all("*", (req, res, next) => {
      * it can be achieved by passing it as a parameter to the 'recordPerformance' method.
      *
      * Example:
-     * chGatekeeper.recordPerformance({status: 404});
+     * gatekeeper.recordPerformance({status: 404});
      *
      * If you are using CrowdHandler's autotune feature, is is crucial to pass accurate status codes to CrowdHandler to ensure the precision of analytics and autotune results.
      */

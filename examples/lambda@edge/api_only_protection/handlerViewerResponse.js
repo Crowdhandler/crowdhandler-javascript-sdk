@@ -1,8 +1,6 @@
 const crowdhandler = require("crowdhandler-sdk");
 const publicKey = "YOUR_PUBLIC_KEY_HERE";
 
-let ch_client = new crowdhandler.PublicClient(publicKey, { timeout: 2000 });
-
 module.exports.originResponse = async (event) => {
   let request = event.Records[0].cf.request;
   let requestHeaders = event.Records[0].cf.request.headers;
@@ -27,17 +25,15 @@ module.exports.originResponse = async (event) => {
   //Work out how long we spent processing at the origin
   let elapsed = Date.now() - startTime;
 
-  let ch_context = new crowdhandler.RequestContext({ lambdaEvent: event });
-
-  //Instantiate the Gatekeeper class
-  let ch_gatekeeper = new crowdhandler.Gatekeeper(
-    ch_client,
-    ch_context,
-    {
-      publicKey: publicKey,
-    },
-    { debug: true }
-  );
+  //Initialize CrowdHandler with Lambda@Edge event
+  const { gatekeeper } = crowdhandler.init({
+    publicKey: publicKey,
+    lambdaEdgeEvent: event,
+    options: { 
+      debug: false,
+      timeout: 2000 
+    }
+  });
 
   //If we don't have a responseID or a startTime, we can't record the performance
   if (!responseID || !startTime) {
@@ -45,7 +41,7 @@ module.exports.originResponse = async (event) => {
   }
 
   //This is a throw away request. We don't need to wait for a response.
-  await ch_gatekeeper.recordPerformance({
+  await gatekeeper.recordPerformance({
     overrideElapsed: elapsed,
     responseID: responseID,
     sample: 1,
