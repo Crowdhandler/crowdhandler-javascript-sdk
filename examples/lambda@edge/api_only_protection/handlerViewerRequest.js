@@ -3,8 +3,6 @@
 const crowdhandler = require("crowdhandler-sdk");
 const publicKey = "YOUR_PUBLIC_KEY_HERE";
 
-let ch_client = new crowdhandler.PublicClient(publicKey, { timeout: 2000 });
-
 module.exports.viewerRequest = async (event) => {
   //extract the request from the event
   let request = event.Records[0].cf.request;
@@ -13,7 +11,7 @@ module.exports.viewerRequest = async (event) => {
   let sourceURL;
 
   //if the request is not a POST or PUT request, return the request unmodified
-  if (request.method !== "POST" || request.method !== "PUT" ) {
+  if (request.method !== "POST" && request.method !== "PUT" ) {
     return request;
   }
 
@@ -43,30 +41,28 @@ module.exports.viewerRequest = async (event) => {
   let temporaryHost = url.host;
   let temporaryPath = url.pathname;
 
-  //Filter the event through the Request Context class
-  let ch_context = new crowdhandler.RequestContext({ lambdaEvent: event });
-  //Instantiate the Gatekeeper class
-  let ch_gatekeeper = new crowdhandler.Gatekeeper(
-    ch_client,
-    ch_context,
-    {
-      publicKey: publicKey,
-    },
-    { debug: true }
-  );
+  //Initialize CrowdHandler with Lambda@Edge event
+  const { gatekeeper } = crowdhandler.init({
+    publicKey: publicKey,
+    lambdaEdgeEvent: event,
+    options: { 
+      debug: false,
+      timeout: 2000 
+    }
+  });
 
   //Override the gatekeeper host with the sourceURL
-  ch_gatekeeper.overrideHost(temporaryHost);
+  gatekeeper.overrideHost(temporaryHost);
   //Override the gatekeeper path with the sourceURL
-  ch_gatekeeper.overridePath(temporaryPath);
+  gatekeeper.overridePath(temporaryPath);
 
   //If there's a token in the body provide gatekeeper with a pseudo cookie so that it can check that the provided token is valid/promoted
   if (chToken) {
-    ch_gatekeeper.overrideCookie(`crowdhandler=${chToken}`);
+    gatekeeper.overrideCookie(`crowdhandler=${chToken}`);
   }
 
   //Validate the request
-  let ch_status = await ch_gatekeeper.validateRequest();
+  let ch_status = await gatekeeper.validateRequest();
 
   //If the request is not promoted, reject the request
   if (!ch_status.promoted) {

@@ -40,13 +40,13 @@ export class LambdaResponseHandler {
 
   
 
-  public setCookie(value: z.infer<typeof CookieObject>) {
+  public setCookie(value: z.infer<typeof CookieObject>, cookieName: string = "crowdhandler") {
     const cookieOptions: any = {
       path: "/",
       secure: true, // cookie will only be sent over HTTPS
     };
     // Append cookie to response header
-    const cookieHeader = `crowdhandler=${value}; ${Object.keys(cookieOptions)
+    const cookieHeader = `${cookieName}=${value}; ${Object.keys(cookieOptions)
       .map((key) => `${key}=${cookieOptions[key]}`)
       .join("; ")}`;
 

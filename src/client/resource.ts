@@ -1,18 +1,18 @@
-import { Client } from "./client";
+import { BaseClient } from "./base_client";
 
-export class Resource extends Client {
+export class Resource extends BaseClient {
   path: string;
   constructor(
     key: string,
     path: string,
-    options: { timeout?: number; debug?: boolean; api_url?: string } = {}
+    options: { timeout?: number; debug?: boolean; apiUrl?: string } = {}
   ) {
     const {
       timeout = 5000,
       debug = false,
-      api_url = "https://api.crowdhandler.com",
+      apiUrl = "https://api.crowdhandler.com",
     } = options ?? {};
-    super(api_url, key, options);
+    super(apiUrl, key, options);
     this.path = path;
   }
 

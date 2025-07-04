@@ -25,12 +25,12 @@ export class BrowserHandler {
     return window.location.href;
   }
 
-  public setCookie(value: string) {
+  public setCookie(value: string, cookieName: string = "crowdhandler") {
     const cookieOptions: any = {
       path: "/",
       secure: true, // cookie will only be sent over HTTPS
     };
-    document.cookie = `crowdhandler=${value}; ${Object.keys(cookieOptions)
+    document.cookie = `${cookieName}=${value}; ${Object.keys(cookieOptions)
       .map((key) => `${key}=${cookieOptions[key]}`)
       .join("; ")}`;
   }

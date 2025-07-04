@@ -7,6 +7,7 @@ export const GatekeeperOptions = z.object({
   mode: z.string().optional(),
   timeout: z.number().optional(),
   trustOnFail: z.boolean().optional(),
+  cookieName: z.string().optional(),
 });
 
 export const GatekeeperKeyPair = z.object({
@@ -49,6 +50,7 @@ export const RequestObject = z
 export const CookieObject = z
   .object({
     tokens: z.array(z.any()),
+    deployment: z.string().optional(),
   })
   .catchall(z.any());
 
@@ -127,6 +129,9 @@ export const ValidateRequestObject = z.object({
   responseID: z.string().optional(),
   slug: z.string().optional(),
   targetURL: z.string().optional(),
+  deployment: z.string().optional(),
+  hash: z.string().nullable().optional(),
+  token: z.string().optional(),
 });
 
 export const HttpErrorWrapper = z.object({
@@ -154,3 +159,13 @@ export const RecordPerformanceOptions = z.object({
   overrideElapsed: z.number().optional(),
   responseID: z.string().optional(),
 });
+
+// Mode constants
+export const Modes = {
+  FULL: 'full',
+  HYBRID: 'hybrid',
+  CLIENTSIDE: 'clientside',
+  AUTO: 'auto'
+} as const;
+
+export type Mode = typeof Modes[keyof typeof Modes];

@@ -32,8 +32,8 @@ import { generateSignature } from "../common/hash";
 
 export class Gatekeeper {
   public PublicClient;
-  private readonly WAIT_URL: string = "https://wait.crowdhandler.com";
-  private readonly STORAGE_NAME: string = "crowdhandler";
+  private WAIT_URL: string = "https://wait.crowdhandler.com";
+  public readonly STORAGE_NAME: string;
   public readonly REQUEST: any;
   public inWaitingRoom: boolean = false;
   private ignore: RegExp =
@@ -73,6 +73,7 @@ export class Gatekeeper {
   public lang: string | undefined;
   public sessionStatus: z.infer<typeof SessionStatusWrapper> | undefined;
   private requested: string | undefined;
+  private deployment: string | undefined;
   private specialParameters: z.infer<typeof SpecialParametersObject> = {
     chCode: "",
     chID: "",
@@ -94,6 +95,9 @@ export class Gatekeeper {
     this.privateKey = keyPair.privateKey;
     //Merge provided options with defaults
     this.options = Object.assign({}, this.options, options);
+    
+    // Set cookie name from options or use default
+    this.STORAGE_NAME = this.options.cookieName || "crowdhandler";
 
     //Hash the private key if mode is set to hybrid
     //Check if privateKey is provided when mode is set to "hybrid"
@@ -164,6 +168,11 @@ export class Gatekeeper {
   //Set the cookie using your own method if you're not happy with the default
   public overrideCookie(cookie: Array<string>) {
     this.cookies = cookie;
+  }
+
+  //Set the waiting room URL for testing or custom deployments
+  public overrideWaitingRoomUrl(url: string) {
+    this.WAIT_URL = url;
   }
 
   /* If you have your own regular expression for urls to ignore set it here
@@ -317,9 +326,6 @@ export class Gatekeeper {
     } else if (simpleCookieValue) {
       logger(this.options.debug, "info", "simple cookie found");
       this.extractTokenFromSimpleCookie(simpleCookieValue);
-    } else if (localStorageValue && this.options.mode === "clientside") {
-      logger(this.options.debug, "info", "localstorage found");
-      this.getTokenFromLocalStorage();
     } else {
       logger(this.options.debug, "info", "Token not found or invalid format");
     }
@@ -550,7 +556,14 @@ export class Gatekeeper {
         this.options.fallbackSlug ||
         "";
 
+      logger(this.options.debug, "info", `Generating redirect URL with slug: ${slug}`);
+      logger(this.options.debug, "info", `Target URL: ${this.targetURL}`);
+      logger(this.options.debug, "info", `Token: ${this.token}`);
+      logger(this.options.debug, "info", `Public Key: ${this.publicKey}`);
+
       const redirectUrl = `${this.WAIT_URL}/${slug}?url=${this.targetURL}&ch-code=&ch-id=${this.token}&ch-public-key=${this.publicKey}`;
+
+      logger(this.options.debug, "info", `Generated redirect URL: ${redirectUrl}`);
 
       return redirectUrl;
     } catch (error: any) {
@@ -646,7 +659,7 @@ export class Gatekeeper {
       const cookieArray = cookies.split(";");
 
       for (const cookieStr of cookieArray) {
-        const [cookieName, ...cookieValueParts] = cookieStr.split("=");
+        const [cookieName, ...cookieValueParts] = cookieStr.trim().split("=");
         const cookieValue = cookieValueParts.join("=");
 
         // If this is the cookie we're interested in, process it.
@@ -671,10 +684,11 @@ export class Gatekeeper {
   }
 
   //TODO: Improve this method alongside refactor of validateRequestHybridMode
-  public generateCookie(tokens: any[]) {
+  public generateCookie(tokens: any[], deployment?: string) {
     return {
       integration: "JSDK",
       tokens: tokens,
+      deployment: deployment || "",
     };
   }
 
@@ -691,12 +705,7 @@ export class Gatekeeper {
   public setCookie(value: string): boolean {
     try {
       // Set the cookie with the provided value and options
-      this.REQUEST.setCookie(value, {
-        secure: true,
-        sameSite: "strict",
-        path: "/",
-        domain: this.host,
-      });
+      this.REQUEST.setCookie(value, this.STORAGE_NAME);
       return true;
     } catch (error: any) {
       logger(this.options.debug, "error", error);
@@ -830,12 +839,8 @@ export class Gatekeeper {
   /**
    * Validate request in a client-side mode.
    *
-   * This method checks for a CrowdHandler cookie first,
-   * falls back to local storage if the cookie doesn't exist,
-   * and gets the session status for the request.
-   *
-   * It processes different cases based on the session status and the specific options set,
-   * ultimately returning an object that contains the results of the validation process.
+   * This method checks for a CrowdHandler cookie and gets the session status for the request.
+   * It works the same as full mode but runs in browser environments.
    *
    * @return {Promise<z.infer<typeof validateRequestObject>>} Result of the validation process.
    */
@@ -843,86 +848,92 @@ export class Gatekeeper {
     z.infer<typeof ValidateRequestObject>
   > {
     // Initial result object with default values
-    const defaultResult: z.infer<typeof ValidateRequestObject> = {
+    let result: z.infer<typeof ValidateRequestObject> = {
       promoted: false,
       stripParams: false,
       setCookie: false,
       setLocalStorage: false,
-      localStorageValue: "",
+      cookieValue: "",
       responseID: "",
       slug: "",
       targetURL: "",
+      deployment: "",
+      hash: null,
+      token: "",
     };
 
-    logger(this.options.debug, "info", `IP: ${this.ip}`);
-    logger(this.options.debug, "info", `Agent: ${this.agent}`);
-    logger(this.options.debug, "info", `Host: ${this.host}`);
-    logger(this.options.debug, "info", `Path: ${this.path}`);
-    logger(this.options.debug, "info", `Lang: ${this.lang}`);
+    try {
+      // Log details for debugging
+      logger(this.options.debug, "info", `IP: ${this.ip}`);
+      logger(this.options.debug, "info", `Agent: ${this.agent}`);
+      logger(this.options.debug, "info", `Host: ${this.host}`);
+      logger(this.options.debug, "info", `Path: ${this.path}`);
+      logger(this.options.debug, "info", `Lang: ${this.lang}`);
 
-    const result = { ...defaultResult };
+      // Skip paths that match the ignore pattern
+      if (ignoredPatternsCheck(this.path, this.ignore)) {
+        logger(this.options.debug, "info", `Ignored path: ${this.path}`);
+        result.promoted = true;
+        return result;
+      }
 
-    // If path matches the ignore pattern, bypass it and promote the result
-    if (ignoredPatternsCheck(this.path, this.ignore)) {
-      logger(this.options.debug, "info", `Ignored path: ${this.path}`);
-      result.promoted = true;
-      return result;
-    }
+      this.processURL();
+      result.targetURL = this.targetURL || "";
+      this.getCookie();
+      this.getToken();
+      await this.getSessionStatus();
 
-    this.processURL();
-    result.targetURL = this.targetURL || "";
+      // Use zod safeparse to check that we're working with the SessionStatusErrorWrapper type
+      let sessionStatusType = HttpErrorWrapper.safeParse(this.sessionStatus);
 
-    this.getCookie();
+      // Handle session status errors
+      if (sessionStatusType.success) {
+        if (this.sessionStatus?.result.status !== 200) {
+          // Can't process the request but we can trust it if trustOnFail is set to true
+          result.promoted = this.options.trustOnFail;
+          if (!this.options.trustOnFail)
+            result.slug = this.options.fallbackSlug;
 
-    if (!this.simpleCookieValue) {
-      this.getLocalStorage();
-    }
-
-    this.findStorageKey();
-    this.getToken();
-    await this.getSessionStatus();
-
-    const sessionStatusType = HttpErrorWrapper.safeParse(this.sessionStatus);
-
-    if (
-      sessionStatusType.success &&
-      this.sessionStatus?.result.status !== 200
-    ) {
-      result.promoted = this.options.trustOnFail || false;
-      result.slug = this.options.trustOnFail
-        ? undefined
-        : this.options.fallbackSlug || "";
-      return result;
-    }
-
-    if (this.sessionStatus?.result.promoted === 0) {
-      result.promoted = false;
-      result.slug = this.sessionStatus.result.slug || "";
-      this.token = this.sessionStatus.result.token || "";
-      return result;
-    } else if (this.sessionStatus?.result.promoted === 1) {
-      result.promoted = true;
-      result.setLocalStorage = true;
-
-      if (this.sessionStatus.result.token) {
-        this.updateLocalStorageToken(this.sessionStatus.result.token);
-        if (this.localStorageValue) {
-          result.localStorageValue =
-            JSON.stringify(this.localStorageValue) || "";
+          return result;
         }
       }
 
-      if (this.sessionStatus.result.responseID) {
-        result.responseID = this.sessionStatus.result.responseID || "";
-        this.responseID = this.sessionStatus.result.responseID || "";
+      // Processing based on promotion status
+      if (this.sessionStatus) {
+        const { promoted, slug, token, responseID, deployment, hash } = this.sessionStatus.result;
+
+        result.promoted = promoted === 1;
+        result.slug = slug || result.slug;
+        this.token = token || this.token;
+        result.token = token || result.token;
+        result.deployment = deployment || result.deployment;
+        result.hash = hash || null;
+        
+        // Always set cookie if we have a token (for both promoted and non-promoted users)
+        if (token) {
+          result.setCookie = true;
+          result.cookieValue = token;
+        }
+        
+        if (promoted === 1) {
+          result.responseID = responseID || result.responseID;
+          this.responseID = responseID || "";
+          
+          if (this.specialParameters.chRequested) {
+            result.stripParams = true;
+          }
+        }
       }
 
-      if (this.specialParameters.chRequested) {
-        result.stripParams = true;
-      }
+      return result;
+    } catch (error) {
+      logger(
+        this.options.debug,
+        "error",
+        `An error occurred during request validation: ${error}`
+      );
+      throw error;
     }
-
-    return result;
   }
 
   /**
@@ -943,6 +954,9 @@ export class Gatekeeper {
       responseID: "",
       slug: "",
       targetURL: "",
+      deployment: "",
+      hash: null,
+      token: "",
     };
 
     try {
@@ -983,20 +997,28 @@ export class Gatekeeper {
 
       // Processing based on promotion status
       if (this.sessionStatus) {
-        const { promoted, slug, token, responseID } = this.sessionStatus.result;
+        const { promoted, slug, token, responseID, deployment, hash } = this.sessionStatus.result;
 
         result.promoted = promoted === 1;
-        result.setCookie = promoted === 1;
         result.slug = slug || result.slug;
-        result.cookieValue =
-          promoted === 1 && token ? token : result.cookieValue;
-        result.responseID =
-          promoted === 1 && responseID ? responseID : result.responseID;
-        this.responseID = promoted === 1 && responseID ? responseID : "";
         this.token = token || this.token;
-
-        if (promoted === 1 && this.specialParameters.chRequested) {
-          result.stripParams = true;
+        result.token = token || result.token;
+        result.deployment = deployment || result.deployment;
+        result.hash = hash || null;
+        
+        // Always set cookie if we have a token (for both promoted and non-promoted users)
+        if (token) {
+          result.setCookie = true;
+          result.cookieValue = token;
+        }
+        
+        if (promoted === 1) {
+          result.responseID = responseID || result.responseID;
+          this.responseID = responseID || "";
+          
+          if (this.specialParameters.chRequested) {
+            result.stripParams = true;
+          }
         }
       }
 
@@ -1028,7 +1050,12 @@ export class Gatekeeper {
       setCookie: false,
       setLocalStorage: false,
       cookieValue: "",
+      responseID: "",
+      slug: "",
       targetURL: "",
+      deployment: "",
+      hash: null,
+      token: "",
     };
 
     logger(this.options.debug, "info", "IP: " + this.ip);
@@ -1083,6 +1110,11 @@ export class Gatekeeper {
     this.getCookie();
 
     logger(this.options.debug, "info", "Cookie: " + this.cookieValue);
+    
+    // Extract deployment from cookie if available
+    if (this.cookieValue && this.cookieValue.deployment) {
+      result.deployment = this.cookieValue.deployment;
+    }
 
     this.getSignature({
       chIDSignature: this.specialParameters.chIDSignature,
@@ -1135,6 +1167,7 @@ export class Gatekeeper {
         if (this.sessionStatus && this.sessionStatus.result.promoted === 0) {
           if (this.sessionStatus.result.token) {
             token = this.sessionStatus.result.token;
+            result.token = token;
             this.getToken({ chID: token });
           }
 
@@ -1154,13 +1187,20 @@ export class Gatekeeper {
             this.requested = this.sessionStatus.result.requested;
           }
 
+          if (this.sessionStatus.result.deployment) {
+            this.deployment = this.sessionStatus.result.deployment;
+            result.deployment = this.deployment;
+          }
+
           if (this.sessionStatus.result.hash) {
             hash = this.sessionStatus.result.hash;
+            result.hash = hash;
             this.getSignature({ chIDSignature: hash });
           }
 
           if (this.sessionStatus.result.token) {
             token = this.sessionStatus.result.token;
+            result.token = token;
             this.getToken({ chID: token });
           }
         }
@@ -1221,13 +1261,20 @@ export class Gatekeeper {
             this.requested = this.sessionStatus.result.requested;
           }
 
+          if (this.sessionStatus.result.deployment) {
+            this.deployment = this.sessionStatus.result.deployment;
+            result.deployment = this.deployment;
+          }
+
           if (this.sessionStatus.result.hash) {
             hash = this.sessionStatus.result.hash;
+            result.hash = hash;
             this.getSignature({ chIDSignature: hash });
           }
 
           if (this.sessionStatus.result.token) {
             token = this.sessionStatus.result.token;
+            result.token = token;
             this.getToken({ chID: token });
           }
         }
@@ -1242,11 +1289,14 @@ export class Gatekeeper {
     logger(this.options.debug, "info", "Signature is valid.");
 
     try {
-      this.cookieValue = CookieObject.parse(this.cookieValue);
-
+      // Only parse cookieValue if it exists
       if (this.cookieValue) {
-        for (const item of this.cookieValue.tokens) {
-          tokens.push(item);
+        this.cookieValue = CookieObject.parse(this.cookieValue);
+
+        if (this.cookieValue) {
+          for (const item of this.cookieValue.tokens) {
+            tokens.push(item);
+          }
         }
       }
     } catch (error: any) {
@@ -1292,7 +1342,7 @@ export class Gatekeeper {
       tokens[tokens.length - 1].touchedSig = this.cookieTokenObject?.touchedSig;
     }
     try {
-      this.cookieValue = this.generateCookie(tokens);
+      this.cookieValue = this.generateCookie(tokens, this.deployment);
     } catch (error: any) {
       logger(this.options.debug, "error", error);
       // Handle the error as appropriate for your application...
@@ -1306,6 +1356,7 @@ export class Gatekeeper {
     //If we made it all the way here, we can assume the user is promoted and a cookie should be set.
     result.promoted = true;
     result.setCookie = true;
+    result.token = this.token;
 
     return result;
   }

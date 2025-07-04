@@ -69,10 +69,12 @@ export class Signature {
 
     //Check that the cookie is in a format that we can work with
     try {
-      CookieObject.parse(this.cookie);
+      if (this.cookie) {
+        CookieObject.parse(this.cookie);
 
-      if (!this.freshSignature && this.cookie) {
-        this.activeCookie = this.cookie.tokens[this.cookie.tokens.length - 1];
+        if (!this.freshSignature && this.cookie) {
+          this.activeCookie = this.cookie.tokens[this.cookie.tokens.length - 1];
+        }
       }
     } catch (error: any) {
       logger(this.debug, "error", error);

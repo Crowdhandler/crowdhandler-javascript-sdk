@@ -28,24 +28,27 @@
 //Import the CrowdHandler SDK
 const crowdhandler = require("crowdhandler-sdk");
 
-//Instantiate a new PrivateClient object
-const private_client = new crowdhandler.PrivateClient("YOUR_PRIVATE_KEY_HERE");
+//Initialize CrowdHandler with private key for API access
+const { client } = crowdhandler.init({
+  publicKey: "YOUR_PUBLIC_KEY_HERE",
+  privateKey: "YOUR_PRIVATE_KEY_HERE"
+});
 
 //Get a list of all domains associated with the key
-let domains = await private_client.domains().get();
+let domains = await client.domains().get();
 
 //Fetch details for a specific domain
-let yourDomain = await private_client.domains().get("dom_4RQg2RBH7DLA");
+let yourDomain = await client.domains().get("dom_4RQg2RBH7DLA");
 
 //Update the rate of yourDomain
-await private_client.domains().put("dom_4RQg2RBH7DLA", {
+await client.domains().put("dom_4RQg2RBH7DLA", {
   rate: 100,
 });
 
 //Fetch a domains report
 //Parameters are passed as an object
-let domainsReport = await private_client
-  .domainsReports()
+let domainsReport = await client
+  .domainReports()
   .get("dom_4RQg2RBH7DLA", {
     from: "2023-06-06T19:59:00.000Z",
     to: "2023-07-06T19:59:00.000Z",
@@ -53,15 +56,15 @@ let domainsReport = await private_client
   });
 
 //Fetch waiting rooms associated with the key
-let rooms = await private_client.rooms().get();
+let rooms = await client.rooms().get();
 
 //Fetch details for a specific room
-let yourRoom = await private_client.rooms().get("room_5SRg2RBH7DLA");
+let yourRoom = await client.rooms().get("room_5SRg2RBH7DLA");
 
 //Get a list of sessions associated with a room
-let roomSessions = await private_client
-  .roomsSessions()
+let roomSessions = await client
+  .roomSessions()
   .get("room_5SRg2RBH7DLA");
 
 //Delete a session
-await private_client.sessions().delete("ses_5SRg2RBH7DLA");
+await client.sessions().delete("ses_5SRg2RBH7DLA");

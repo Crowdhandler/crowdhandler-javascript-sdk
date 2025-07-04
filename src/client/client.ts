@@ -1,149 +1,239 @@
-import axios, { AxiosInstance } from "axios";
-import { z, ZodError } from "zod";
-import { logger } from "../common/logger";
+import { PublicClient } from "./public_client";
+import { PrivateClient } from "./private_client";
+import { createError } from "../common/errors";
 
-const APIResponse = z.object({}).catchall(z.any());
-
-const CustomResponse = z
-  .object({
-    result: z.object({
-      error: z.string(),
-      status: z.number(),
-    }),
-  })
-  .catchall(z.any());
-
-class ResponseGenerator {
-  message: string;
-  status: number;
-
-  constructor(message: string = "Something went wrong.", status: number = 500) {
-    this.message = message;
-    this.status = status;
-  }
-
-  genErrorResponse() {
-    return {
-      result: {
-        error: this.message,
-        status: this.status,
-      },
-    };
-  }
+/**
+ * Configuration for the unified Client
+ */
+interface ClientConfig {
+  /** Your CrowdHandler public key */
+  publicKey: string;
+  
+  /** Your CrowdHandler private key (required for private API access) */
+  privateKey?: string;
+  
+  /** Additional client options */
+  options?: {
+    /** API request timeout in milliseconds (default: 5000) */
+    timeout?: number;
+    
+    /** Enable debug logging (default: false) */
+    debug?: boolean;
+    
+    /** Custom API URL (default: https://api.crowdhandler.com) */
+    apiUrl?: string;
+  };
 }
 
+/**
+ * Unified CrowdHandler API client that combines public and private API access.
+ * 
+ * This client provides a single interface to all CrowdHandler API endpoints,
+ * with intelligent error messages when attempting to use private endpoints
+ * without a private key.
+ * 
+ * @example
+ * // Public API only
+ * const client = new Client({ publicKey: 'pk_xyz' });
+ * const rooms = await client.rooms().get();
+ * 
+ * @example
+ * // Public and Private API
+ * const client = new Client({ 
+ *   publicKey: 'pk_xyz',
+ *   privateKey: 'sk_xyz' 
+ * });
+ * const domains = await client.domains().get();
+ */
 export class Client {
-  protected debug: boolean;
-  protected api_url: string;
-  protected key: string;
-  protected timeout: number;
+  private publicClient: PublicClient;
+  private privateClient?: PrivateClient;
+  private hasPrivateAccess: boolean;
 
-  constructor(
-    api_url: string,
-    key: string,
-    options: { timeout?: number; debug?: boolean; api_url?: string } = {}
-  ) {
-    this.debug = options.debug || false;
-    this.api_url = options.api_url || api_url;
-    this.key = key;
-    this.timeout = options.timeout || 5000;
-    axios.defaults.timeout = this.timeout;
-  }
-
-  async errorHandler(error: any) {
-    if (error.response) {
-      // The request was made and the server responded with a status code
-      // that falls out of the range of 2xx
-
-      logger(this.debug, "error", error.response.data);
-      logger(this.debug, "error", error.response.status);
-      logger(this.debug, "error", error.response.headers);
-
-      let response = new ResponseGenerator(
-        error.response.data.error,
-        error.response.status
-      ).genErrorResponse();
-      return CustomResponse.parse(response);
-    } else if (error.request) {
-      // The request was made but no response was received
-      // `error.request` is an instance of XMLHttpRequest in the browser and an instance of
-      // http.ClientRequest in node.js
-
-      logger(this.debug, "error", error.message);
-
-      let response = new ResponseGenerator(
-        error.message,
-        500
-      ).genErrorResponse();
-      return CustomResponse.parse(response);
-    } else {
-      logger(this.debug, "error", error.message);
-
-      let response = new ResponseGenerator(
-        error.message,
-        500
-      ).genErrorResponse();
-      return CustomResponse.parse(response);
+  constructor(config: ClientConfig) {
+    this.publicClient = new PublicClient(config.publicKey, config.options);
+    this.hasPrivateAccess = !!config.privateKey;
+    
+    if (config.privateKey) {
+      this.privateClient = new PrivateClient(config.privateKey, config.options);
     }
   }
 
-  async httpDELETE(path: string, body: object) {
-    try {
-      const response = await axios.delete(this.api_url + path, {
-        headers: {
-          "x-api-key": this.key,
-        },
-      });
-
-      return APIResponse.parse(response.data);
-    } catch (error) {
-      return this.errorHandler(error);
-    }
+  // ===== Public API Methods (always available) =====
+  
+  /**
+   * Access request resources
+   * @returns Resource instance for request operations
+   * 
+   * @example
+   * const request = await client.requests().get('req_123');
+   */
+  requests() {
+    return this.publicClient.requests();
   }
 
-  async httpGET(path?: string, params?: object) {
-    try {
-      const response = await axios.get(this.api_url + path, {
-        params: params,
-        headers: {
-          "x-api-key": this.key,
-        },
-      });
-      return APIResponse.parse(response.data);
-    } catch (error) {
-      return this.errorHandler(error);
-    }
+  /**
+   * Access response resources
+   * @returns Resource instance for response operations
+   * 
+   * @example
+   * const response = await client.responses().get('res_123');
+   */
+  responses() {
+    return this.publicClient.responses();
   }
 
-  async httpPOST(
-    path: string,
-    body?: Record<string, any>,
-    headers?: Record<string, any>,
-    schema: z.Schema = APIResponse
-  ) {
-    try {
-      const response = await axios.post(this.api_url + path, body, {
-        headers: {
-          "x-api-key": this.key,
-          ...headers,
-        },
-      });
-      return schema.parse(response.data);
-    } catch (error) {
-      return this.errorHandler(error);
-    }
+  /**
+   * Access room resources
+   * @returns Resource instance for room operations
+   * 
+   * @example
+   * const rooms = await client.rooms().get();
+   * const room = await client.rooms().get('room_123');
+   */
+  rooms() {
+    return this.publicClient.rooms();
   }
 
-  async httpPUT(path: string, body: object) {
-    try {
-      const response = await axios.put(this.api_url + path, body, {
-        headers: {
-          "x-api-key": this.key,
-        },
-      });
-      return APIResponse.parse(response.data);
-    } catch (error) {
-      return this.errorHandler(error);
+  // ===== Private API Methods (require privateKey) =====
+  
+  /**
+   * Access account information (requires private key)
+   * @returns Resource instance for account operations
+   * @throws {CrowdHandlerError} When no private key is configured
+   * 
+   * @example
+   * const account = await client.account().get();
+   */
+  account() {
+    this.requirePrivateAccess('account()');
+    return this.privateClient!.account();
+  }
+
+  accountPlan() {
+    this.requirePrivateAccess('accountPlan()');
+    return this.privateClient!.accountPlan();
+  }
+
+  codes() {
+    this.requirePrivateAccess('codes()');
+    return this.privateClient!.codes();
+  }
+
+  /**
+   * Access domain resources (requires private key)
+   * @returns Resource instance for domain operations
+   * @throws {CrowdHandlerError} When no private key is configured
+   * 
+   * @example
+   * const domains = await client.domains().get();
+   * const domain = await client.domains().get('dom_123');
+   * const newDomain = await client.domains().post({ domain: 'example.com' });
+   */
+  domains() {
+    this.requirePrivateAccess('domains()');
+    return this.privateClient!.domains();
+  }
+
+  domainIPs() {
+    this.requirePrivateAccess('domainIPs()');
+    return this.privateClient!.domainIPs();
+  }
+
+  domainReports() {
+    this.requirePrivateAccess('domainReports()');
+    return this.privateClient!.domainReports();
+  }
+
+  domainRequests() {
+    this.requirePrivateAccess('domainRequests()');
+    return this.privateClient!.domainRequests();
+  }
+
+  domainRooms() {
+    this.requirePrivateAccess('domainRooms()');
+    return this.privateClient!.domainRooms();
+  }
+
+  domainURLs() {
+    this.requirePrivateAccess('domainURLs()');
+    return this.privateClient!.domainURLs();
+  }
+
+  groups() {
+    this.requirePrivateAccess('groups()');
+    return this.privateClient!.groups();
+  }
+
+  groupBatch() {
+    this.requirePrivateAccess('groupBatch()');
+    return this.privateClient!.groupBatch();
+  }
+
+  groupCodes() {
+    this.requirePrivateAccess('groupCodes()');
+    return this.privateClient!.groupCodes();
+  }
+
+  ips() {
+    this.requirePrivateAccess('ips()');
+    return this.privateClient!.ips();
+  }
+
+  reports() {
+    this.requirePrivateAccess('reports()');
+    return this.privateClient!.reports();
+  }
+
+  roomReports() {
+    this.requirePrivateAccess('roomReports()');
+    return this.privateClient!.roomReports();
+  }
+
+  roomSessions() {
+    this.requirePrivateAccess('roomSessions()');
+    return this.privateClient!.roomSessions();
+  }
+
+  /**
+   * Access session resources (requires private key)
+   * @returns Resource instance for session operations
+   * @throws {CrowdHandlerError} When no private key is configured
+   * 
+   * @example
+   * const sessions = await client.sessions().get();
+   * const session = await client.sessions().get('ses_123');
+   */
+  sessions() {
+    this.requirePrivateAccess('sessions()');
+    return this.privateClient!.sessions();
+  }
+
+  templates() {
+    this.requirePrivateAccess('templates()');
+    return this.privateClient!.templates();
+  }
+
+  // ===== Internal Methods =====
+  
+  /**
+   * Get the internal PublicClient instance (used by Gatekeeper)
+   */
+  getPublicClient(): PublicClient {
+    return this.publicClient;
+  }
+
+  /**
+   * Check if private API access is available
+   */
+  hasPrivateAPIAccess(): boolean {
+    return this.hasPrivateAccess;
+  }
+
+  // ===== Helper Methods =====
+  private requirePrivateAccess(method: string): void {
+    if (!this.hasPrivateAccess) {
+      throw createError.missingPrivateKey(method);
     }
   }
 }

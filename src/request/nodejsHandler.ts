@@ -50,7 +50,7 @@ export class NodeJSHandler {
       return this.request.ip;
     }
   
-    public setCookie(value: z.infer<typeof CookieObject>) {
+    public setCookie(value: z.infer<typeof CookieObject>, cookieName: string = "crowdhandler") {
       const cookieOptions: any = {
         path: "/",
         secure: true, // cookie will only be sent over HTTPS
@@ -58,7 +58,7 @@ export class NodeJSHandler {
       //Append cookie to response header
       return this.response.setHeader(
         "Set-Cookie",
-        `crowdhandler=${value}; ${Object.keys(cookieOptions)
+        `${cookieName}=${value}; ${Object.keys(cookieOptions)
           .map((key) => `${key}=${cookieOptions[key]}`)
           .join("; ")}`
       );
