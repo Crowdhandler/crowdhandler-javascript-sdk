@@ -1,5 +1,17 @@
 import { z } from "zod";
 
+// Lite Validator types
+export const RoomConfig = z.object({
+  domain: z.string(), // Format: "https://example.com"
+  urlPattern: z.string().optional(),
+  patternType: z.enum(['regex', 'contains', 'all']).optional(),
+  queueActivatesOn: z.number().optional(),
+  slug: z.string(),
+  timeout: z.number().optional()
+});
+
+export const RoomsConfig = z.array(RoomConfig);
+
 //Gatekeeper Options
 export const GatekeeperOptions = z.object({
   debug: z.boolean().optional(),
@@ -8,6 +20,8 @@ export const GatekeeperOptions = z.object({
   timeout: z.number().optional(),
   trustOnFail: z.boolean().optional(),
   cookieName: z.string().optional(),
+  liteValidator: z.boolean().optional(),
+  roomsConfig: RoomsConfig.optional(), // Array of room configs
 });
 
 export const GatekeeperKeyPair = z.object({
@@ -94,7 +108,7 @@ export const SignatureSourceObject = z.object({
   crowdhandlerCookieValue: CookieObject.optional(),
 });
 
-export const GetTokenOptions = z.object({
+export const ExtractTokenOptions = z.object({
   //object can contain anything and we don't know any of the possible values
   crowdhandlerCookieValue: CookieObject.optional(),
   chID: z.string().optional(),
@@ -132,6 +146,8 @@ export const ValidateRequestObject = z.object({
   deployment: z.string().optional(),
   hash: z.string().nullable().optional(),
   token: z.string().optional(),
+  liteValidatorRedirect: z.boolean().optional(),
+  liteValidatorUrl: z.string().optional(),
 });
 
 export const HttpErrorWrapper = z.object({

@@ -65,6 +65,8 @@ export type {
   ValidateRequestObject,
   RecordPerformanceOptions,
   GatekeeperOptions,
+  RoomConfig,
+  RoomsConfig,
 } from './common/types';
 
 // Re-export types with better names
@@ -73,11 +75,13 @@ import {
   ValidateRequestObject as ValidateRequestSchema,
   RecordPerformanceOptions as RecordPerformanceSchema,
   GatekeeperOptions as GatekeeperOptionsSchema,
+  RoomConfig as RoomConfigSchema,
 } from './common/types';
 
 export type ValidateRequestResult = z.infer<typeof ValidateRequestSchema>;
 export type RecordPerformanceOptions = z.infer<typeof RecordPerformanceSchema>;
 export type GatekeeperOptions = z.infer<typeof GatekeeperOptionsSchema>;
+export type LiteValidatorRoom = z.infer<typeof RoomConfigSchema>;
 
 // Mode constants for better IntelliSense
 export { Mode, Modes } from './common/types';

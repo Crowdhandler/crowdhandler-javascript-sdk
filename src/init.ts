@@ -53,6 +53,19 @@ export interface InitConfig {
     
     /** Custom cookie name (default: 'crowdhandler') */
     cookieName?: string;
+    
+    /** Enable lite validator mode */
+    liteValidator?: boolean;
+    
+    /** Room configuration for lite validator - array of room configs */
+    roomsConfig?: Array<{
+      domain: string;
+      slug: string;
+      urlPattern?: string;
+      patternType?: 'regex' | 'contains' | 'all';
+      queueActivatesOn?: number;
+      timeout?: number;
+    }>;
   };
 }
 
@@ -186,7 +199,9 @@ export function init(config: InitConfig): InitResult {
       timeout: config.options?.timeout,
       trustOnFail: config.options?.trustOnFail,
       fallbackSlug: config.options?.fallbackSlug,
-      cookieName: config.options?.cookieName
+      cookieName: config.options?.cookieName,
+      liteValidator: config.options?.liteValidator,
+      roomsConfig: config.options?.roomsConfig
     };
     
     // Create gatekeeper using the public client from our unified client
