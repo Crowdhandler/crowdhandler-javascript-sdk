@@ -23,10 +23,11 @@ import {
   SessionStatusWrapper,
   RecordPerformanceOptions,
   SignatureSourceObject,
-  GetTokenOptions,
+  ExtractTokenOptions,
   LocalStorageObject,
   LocalStorageOptions,
   ProcessURLResultObject,
+  RoomConfig,
 } from "../common/types";
 import { generateSignature } from "../common/hash";
 
@@ -141,6 +142,11 @@ export class Gatekeeper {
   }
 
   //Set the host using your own method if you're not happy with the default
+  /**
+   * Override the request host for testing or special routing needs.
+   * 
+   * @param {string} host - The host to use (e.g., 'example.com')
+   */
   public overrideHost(host: string) {
     this.host = host;
   }
@@ -170,7 +176,15 @@ export class Gatekeeper {
     this.cookies = cookie;
   }
 
-  //Set the waiting room URL for testing or custom deployments
+  /**
+   * Overrides the default CrowdHandler waiting room with your custom URL.
+   * 
+   * @param {string} url - The custom waiting room URL
+   * 
+   * @example
+   * // Redirect to your custom queue page
+   * gatekeeper.overrideWaitingRoomUrl('https://mysite.com/custom-queue');
+   */
   public overrideWaitingRoomUrl(url: string) {
     this.WAIT_URL = url;
   }
@@ -304,10 +318,11 @@ export class Gatekeeper {
   }
 
   /**
-   * Retrieves a token based on the provided options or instance variables.
-   * @param options - The options for retrieving the token.
+   * Extracts and sets the token from various sources (URL params, cookies, etc).
+   * This is an internal method used during request validation.
+   * @param options - The options for extracting the token.
    */
-  public getToken(options?: z.infer<typeof GetTokenOptions>): void {
+  private extractToken(options?: z.infer<typeof ExtractTokenOptions>): void {
     // Use option values if provided, else fall back to constructor values
     const chID = options?.chID ?? this.specialParameters.chID;
     const crowdhandlerCookieValue =
@@ -497,9 +512,16 @@ export class Gatekeeper {
   }
 
   /**
-   * Redirects the request to another URL if it is not promoted.
-   *
-   * @returns Redirection response or error message.
+   * Convenience method that handles the complete redirect flow for non-promoted users.
+   * Automatically manages cookies and redirects.
+   * 
+   * @returns {string} Success message after redirect
+   * @throws {Error} If unable to determine redirect URL
+   * 
+   * @example
+   * if (!result.promoted) {
+   *   return gatekeeper.redirectIfNotPromoted();
+   * }
    */
   public redirectIfNotPromoted(): string {
     try {
@@ -521,6 +543,18 @@ export class Gatekeeper {
    *
    * @param targetURL The target URL to redirect to.
    * @throws {Error} If decoding or redirecting fails.
+   */
+  /**
+   * Removes CrowdHandler tracking parameters from URLs. Use when result.stripParams is true
+   * to keep URLs clean.
+   * 
+   * @param {string} targetURL - The encoded URL to clean and redirect to (from result.targetURL)
+   * @throws {Error} If the decoded URL is not a valid HTTP(S) URL
+   * 
+   * @example
+   * if (result.stripParams) {
+   *   return gatekeeper.redirectToCleanUrl(result.targetURL);
+   * }
    */
   public redirectToCleanUrl(targetURL: string): void {
     try {
@@ -693,14 +727,16 @@ export class Gatekeeper {
   }
 
   /**
-   * Set CrowdHandler session cookie.
-   *
-   * @param value - The value of the cookie to be set.
-   *
-   * @throws If an error occurs while setting the cookie, an Error is thrown and caught, logged with the logger,
-   * and the function returns false.
-   *
-   * @returns True if the cookie was successfully set, false otherwise.
+   * Sets the CrowdHandler session cookie. Always call this when result.setCookie is true
+   * to maintain the user's queue position.
+   * 
+   * @param {string} value - The cookie value to set (from result.cookieValue)
+   * @returns {boolean} True if the cookie was successfully set, false otherwise
+   * 
+   * @example
+   * if (result.setCookie) {
+   *   gatekeeper.setCookie(result.cookieValue);
+   * }
    */
   public setCookie(value: string): boolean {
     try {
@@ -776,9 +812,24 @@ export class Gatekeeper {
   }
 
   /**
-   * Send current page performance to CrowdHandler
-   * @param options Options object containing HTTP Response code, Sample rate, Override elapsed time, and Response ID.
-   * @throws If an error occurs while making the API request, an Error is thrown and caught, and then logged with the logger.
+   * Records performance metrics to help CrowdHandler optimize queue flow and capacity.
+   * 
+   * @param {RecordPerformanceOptions} options - Optional performance recording options:
+   * - `sample` {number} - Sample rate (0-1). Default: 0.2 (20% of requests)
+   * - `statusCode` {number} - HTTP status code. Default: 200
+   * - `overrideElapsed` {number} - Override elapsed time in ms
+   * - `responseID` {string} - Specific response ID to record
+   * 
+   * @example
+   * // Simple usage (recommended)
+   * await gatekeeper.recordPerformance();
+   * 
+   * @example
+   * // With custom options
+   * await gatekeeper.recordPerformance({
+   *   sample: 0.2,  // Sample 20% of requests
+   *   statusCode: 200
+   * });
    */
   public async recordPerformance(
     options?: z.infer<typeof RecordPerformanceOptions>
@@ -819,6 +870,224 @@ export class Gatekeeper {
     }
   }
 
+  /**
+   * Extracts the creation date from a token's base60 encoded timestamp
+   */
+  private tokenCreationDate(token: string): number {
+    const base60 = "0123456789ABCDEFGHIJKLMNPQRSTUVWXYZabcdefghijklmnpqrstuvwxyz";
+    const tok_meta = token.slice(4, 10);
+    
+    const year = base60.indexOf(tok_meta[0]);
+    const month = base60.indexOf(tok_meta[1]) - 1;
+    const day = base60.indexOf(tok_meta[2]);
+    const hour = base60.indexOf(tok_meta[3]);
+    const minute = base60.indexOf(tok_meta[4]);
+    const second = base60.indexOf(tok_meta[5]);
+    
+    return Date.UTC(2000 + year, month, day, hour, minute, second);
+  }
+
+  /**
+   * Checks if a token is older than 12 hours
+   */
+  private isOldToken(token?: string): boolean {
+    logger(this.options.debug, "info", `[Lite Validator] Checking token age for: ${token}`);
+    
+    if (!token || !token.startsWith("tok")) {
+      logger(this.options.debug, "info", "[Lite Validator] Token not in a format that we can timestamp.");
+      return false;
+    }
+
+    // Only handle tok0 format tokens
+    if (!token.startsWith("tok0")) {
+      logger(this.options.debug, "info", `[Lite Validator] Token format '${token.substring(0,4)}' not supported for age checking`);
+      return false;
+    }
+
+    const dateStampUTC = new Date().getTime();
+    const tokenCreated = this.tokenCreationDate(token);
+    const tokenCreatedDate = new Date(tokenCreated);
+    const differenceInHours = (dateStampUTC - tokenCreated) / (1000 * 60 * 60);
+
+    logger(this.options.debug, "info", `[Lite Validator] Token created: ${tokenCreatedDate.toISOString()}, Age: ${differenceInHours.toFixed(2)} hours`);
+
+    if (differenceInHours > 12) {
+      logger(this.options.debug, "info", "[Lite Validator] Token is older than 12 hours - will trigger redirect");
+      return true;
+    }
+
+    logger(this.options.debug, "info", "[Lite Validator] Token is fresh (< 12 hours old)");
+    return false;
+  }
+
+  /**
+   * Checks if the current request matches any configured room patterns
+   * Rooms are pre-ordered by precedence (regex → contains → all)
+   * First match wins
+   */
+  private matchRoomConfig(): { status: boolean; room?: any } {
+    const roomMeta = {
+      domain: null,
+      patternType: null,
+      queueActivatesOn: null,
+      slug: null,
+      status: false,
+      timeout: null,
+    };
+
+    if (!this.options.roomsConfig || this.options.roomsConfig.length === 0) {
+      logger(this.options.debug, "info", "[Lite Validator] No rooms config provided or empty array");
+      return roomMeta;
+    }
+
+    const host = this.host;
+    // Note: this.path already includes query string from all REQUEST handlers
+    const path = this.path;
+    const fullDomain = `https://${host}`;
+    
+    logger(this.options.debug, "info", `[Lite Validator] Checking rooms for domain: ${fullDomain}, path: ${path}`);
+    logger(this.options.debug, "info", `[Lite Validator] Total rooms in config: ${this.options.roomsConfig.length}`);
+    
+    // Filter rooms by domain
+    const filteredResults = this.options.roomsConfig.filter((item: z.infer<typeof RoomConfig>) => {
+      const matches = item.domain === fullDomain;
+      if (matches) {
+        logger(this.options.debug, "info", `[Lite Validator] Domain match found: ${item.slug}`);
+      }
+      return matches;
+    });
+
+    logger(this.options.debug, "info", `[Lite Validator] Rooms matching domain: ${filteredResults.length}`);
+
+    // Find first match - rooms are pre-ordered by precedence
+    for (const item of filteredResults) {
+      logger(this.options.debug, "info", `[Lite Validator] Testing room '${item.slug}' with pattern '${item.urlPattern}' (type: ${item.patternType})`);
+      
+      if (this.patternCheck(item, path) === true) {
+        logger(this.options.debug, "info", `[Lite Validator] MATCH FOUND: Room '${item.slug}' matches current path`);
+        
+        // First match is the best match
+        roomMeta.domain = item.domain;
+        roomMeta.patternType = item.patternType;
+        roomMeta.queueActivatesOn = item.queueActivatesOn;
+        roomMeta.slug = item.slug;
+        roomMeta.status = true;
+        roomMeta.timeout = item.timeout;
+        break; // Stop at first match
+      }
+    }
+
+    if (!roomMeta.status) {
+      logger(this.options.debug, "info", "[Lite Validator] No matching room found for current path");
+    }
+
+    return roomMeta;
+  }
+
+  /**
+   * Pattern checking logic - matches reference implementation
+   */
+  private patternCheck(item: any, path: string): boolean {
+    switch (item.patternType) {
+      case "regex":
+        if (!item.urlPattern) return false;
+        const regex = new RegExp(item.urlPattern);
+        return regex.test(path);
+
+      case "contains":
+        if (!item.urlPattern) return false;
+        return path.includes(item.urlPattern);
+
+      case "all":
+        return true;
+
+      default:
+        return false;
+    }
+  }
+
+  /**
+   * Determines if the request should be redirected to the lite validator
+   */
+  private shouldRedirectToLiteValidator(): { redirect: boolean; url?: string } {
+    logger(this.options.debug, "info", "[Lite Validator] === Starting lite validator check ===");
+    logger(this.options.debug, "info", `[Lite Validator] Lite validator enabled: ${this.options.liteValidator}`);
+    logger(this.options.debug, "info", `[Lite Validator] Rooms config provided: ${!!this.options.roomsConfig}`);
+    logger(this.options.debug, "info", `[Lite Validator] Current token: ${this.token || 'NO TOKEN'}`);
+    
+    if (!this.options.liteValidator || !this.options.roomsConfig) {
+      logger(this.options.debug, "info", "[Lite Validator] Lite validator disabled or no rooms config - skipping");
+      return { redirect: false };
+    }
+
+    // Check if current path matches any protected room
+    const roomMatch = this.matchRoomConfig();
+    if (!roomMatch.status) {
+      logger(this.options.debug, "info", "[Lite Validator] No room match - skipping lite validator");
+      return { redirect: false };
+    }
+
+    logger(this.options.debug, "info", `[Lite Validator] Room matched: ${(roomMatch as any).slug || 'match found'}`);
+
+    // Check if token is missing or old
+    const tokenMissing = !this.token;
+    const tokenIsOld = this.token ? this.isOldToken(this.token) : false;
+    
+    logger(this.options.debug, "info", `[Lite Validator] Token missing: ${tokenMissing}, Token old: ${tokenIsOld}`);
+    
+    if (tokenMissing || tokenIsOld) {
+      const redirectUrl = this.buildLiteValidatorUrl();
+      logger(this.options.debug, "info", `[Lite Validator] REDIRECT REQUIRED to: ${redirectUrl}`);
+      return { redirect: true, url: redirectUrl };
+    }
+
+    logger(this.options.debug, "info", "[Lite Validator] Token is valid - no redirect needed");
+    return { redirect: false };
+  }
+
+  /**
+   * Builds the lite validator redirect URL
+   */
+  private buildLiteValidatorUrl(): string {
+    const apiUrl = (this.PublicClient as any).apiUrl || 'https://api.crowdhandler.com';
+    const baseUrl = `${apiUrl}/v1/redirect/requests`;
+    // targetURL is already encoded by ProcessURL
+    const targetUrl = this.targetURL || '';
+    const code = this.specialParameters.chCode || '';
+    
+    const params = `ch-public-key=${this.publicKey}&url=${targetUrl}&ch-code=${code}`;
+    
+    return this.token 
+      ? `${baseUrl}/${this.token}?${params}`
+      : `${baseUrl}?${params}`;
+  }
+
+  /**
+   * The primary method for validating requests against CrowdHandler's queue system.
+   * Determines whether a user should be granted access to your protected resource or sent to a waiting room.
+   * 
+   * @returns {Promise<ValidateRequestObject>} Instructions on how to handle the request:
+   * - `promoted` {boolean} - true = grant access, false = send to waiting room
+   * - `setCookie` {boolean} - true = update the user's session cookie
+   * - `cookieValue` {string} - The session token to store in the cookie
+   * - `stripParams` {boolean} - true = remove CrowdHandler URL parameters
+   * - `targetURL` {string} - Where to redirect (clean URL or waiting room)
+   * - `slug` {string} - The waiting room slug (when not promoted)
+   * - `responseID` {string} - Response ID for performance tracking (when promoted)
+   * - `deployment` {string} - Deployment identifier from the API
+   * - `token` {string} - The session token
+   * - `hash` {string | null} - Signature hash for validation (when available)
+   * - `liteValidatorRedirect` {boolean} - Whether to redirect for lite validation
+   * - `liteValidatorUrl` {string} - URL for lite validator redirect
+   * 
+   * @example
+   * const result = await gatekeeper.validateRequest();
+   * if (!result.promoted) {
+   *   return gatekeeper.redirectIfNotPromoted();
+   * }
+   * 
+   * @throws {CrowdHandlerError} When API connection fails (check error.code === 'API_CONNECTION_FAILED')
+   */
   public async validateRequest() {
     switch (this.options.mode) {
       case "hybrid":
@@ -880,7 +1149,20 @@ export class Gatekeeper {
       this.processURL();
       result.targetURL = this.targetURL || "";
       this.getCookie();
-      this.getToken();
+      this.extractToken();
+      
+      // Lite validator check - EARLY EXIT
+      logger(this.options.debug, "info", "[Lite Validator] Performing lite validator check in validateRequestClientSideMode");
+      const liteCheck = this.shouldRedirectToLiteValidator();
+      if (liteCheck.redirect) {
+        logger(this.options.debug, "info", "[Lite Validator] Lite validator redirect triggered in clientside mode");
+        result.liteValidatorRedirect = true;
+        result.liteValidatorUrl = liteCheck.url;
+        result.promoted = false;
+        return result;
+      }
+      logger(this.options.debug, "info", "[Lite Validator] Continuing with normal validation")
+      
       await this.getSessionStatus();
 
       // Use zod safeparse to check that we're working with the SessionStatusErrorWrapper type
@@ -977,7 +1259,20 @@ export class Gatekeeper {
       this.processURL();
       result.targetURL = this.targetURL;
       this.getCookie();
-      this.getToken();
+      this.extractToken();
+      
+      // Lite validator check - EARLY EXIT
+      logger(this.options.debug, "info", "[Lite Validator] Performing lite validator check in validateRequestClientSideMode");
+      const liteCheck = this.shouldRedirectToLiteValidator();
+      if (liteCheck.redirect) {
+        logger(this.options.debug, "info", "[Lite Validator] Lite validator redirect triggered in clientside mode");
+        result.liteValidatorRedirect = true;
+        result.liteValidatorUrl = liteCheck.url;
+        result.promoted = false;
+        return result;
+      }
+      logger(this.options.debug, "info", "[Lite Validator] Continuing with normal validation")
+      
       await this.getSessionStatus();
 
       // Use zod safeparse to check that we're working with the SessionStatusErrorWrapper type
@@ -1075,6 +1370,16 @@ export class Gatekeeper {
     result.targetURL = this.targetURL;
 
     this.getCookie();
+    this.extractToken();
+    
+    // Lite validator check - EARLY EXIT
+    const liteCheck = this.shouldRedirectToLiteValidator();
+    if (liteCheck.redirect) {
+      result.liteValidatorRedirect = true;
+      result.liteValidatorUrl = liteCheck.url;
+      result.promoted = false;
+      return result;
+    }
 
     await this.getConfig();
 
@@ -1120,7 +1425,7 @@ export class Gatekeeper {
       chIDSignature: this.specialParameters.chIDSignature,
       crowdhandlerCookieValue: this.cookieValue,
     });
-    this.getToken();
+    this.extractToken();
 
     logger(this.options.debug, "info", "Signature: " + this.simpleSignature);
     logger(
@@ -1168,7 +1473,7 @@ export class Gatekeeper {
           if (this.sessionStatus.result.token) {
             token = this.sessionStatus.result.token;
             result.token = token;
-            this.getToken({ chID: token });
+            this.extractToken({ chID: token });
           }
 
           result.promoted = false;
@@ -1201,7 +1506,7 @@ export class Gatekeeper {
           if (this.sessionStatus.result.token) {
             token = this.sessionStatus.result.token;
             result.token = token;
-            this.getToken({ chID: token });
+            this.extractToken({ chID: token });
           }
         }
       } catch (error: any) {
@@ -1275,7 +1580,7 @@ export class Gatekeeper {
           if (this.sessionStatus.result.token) {
             token = this.sessionStatus.result.token;
             result.token = token;
-            this.getToken({ chID: token });
+            this.extractToken({ chID: token });
           }
         }
       } catch (error: any) {

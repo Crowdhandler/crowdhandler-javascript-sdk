@@ -158,7 +158,9 @@ const result = await gatekeeper.validateRequest();
   responseID: string,     // Response ID for performance tracking (when promoted)
   deployment: string,     // Deployment identifier from the API
   token: string,          // The session token
-  hash: string | null     // Signature hash for validation (when available)
+  hash: string | null,    // Signature hash for validation (when available)
+  liteValidatorRedirect: boolean,  // true = redirect to lite validator
+  liteValidatorUrl: string         // URL for lite validator redirect
 }
 ```
 
@@ -262,7 +264,16 @@ const instance = crowdhandler.init({
     timeout: 5000,        // API timeout in milliseconds
     trustOnFail: true,    // Allow access if API fails
     fallbackSlug: '',     // Fallback room slug when trustOnFail is false
-    cookieName: 'crowdhandler'  // Custom cookie name (default: 'crowdhandler')
+    cookieName: 'crowdhandler',  // Custom cookie name (default: 'crowdhandler')
+    liteValidator: false, // Enable lite validator mode (default: false)
+    roomsConfig: [{       // Array of room configurations for lite validator
+      domain: string,     // e.g. 'https://example.com'
+      slug: string,       // Room identifier
+      urlPattern?: string,  // URL pattern to match
+      patternType?: 'regex' | 'contains' | 'all',
+      queueActivatesOn?: number,  // Unix timestamp
+      timeout?: number    // Timeout in seconds
+    }]
   }
 });
 ```
@@ -566,6 +577,43 @@ await gatekeeper.recordPerformance({
   overrideElapsed: 1234  // Custom timing in ms
 });
 ```
+
+### Lite Validator Mode
+
+Lite validator mode provides token refresh without API calls by checking room configuration locally. To enable it:
+
+1. Set `liteValidator: true` in options
+2. Fetch and provide your rooms configuration from the CrowdHandler API
+
+```javascript
+// First, fetch your rooms configuration
+const { client } = init({ publicKey: 'YOUR_PUBLIC_KEY' });
+const roomsResponse = await client.rooms().get();
+
+// Then initialize with lite validator enabled
+const { gatekeeper } = init({
+  publicKey: 'YOUR_PUBLIC_KEY',
+  request: req,
+  response: res,
+  options: {
+    liteValidator: true,              // Enable lite validator
+    roomsConfig: roomsResponse.result // Pass the rooms array from API
+  }
+});
+
+// Handle the lite validator redirect
+const result = await gatekeeper.validateRequest();
+
+if (result.liteValidatorRedirect) {
+  // Redirect to refresh token/session
+  return gatekeeper.redirect(result.liteValidatorUrl);
+}
+```
+
+**When lite validator activates:**
+- URL matches a room in your config
+- Token is missing or >12 hours old
+- Redirects to CrowdHandler to refresh session
 
 ## Testing
 
