@@ -1,11 +1,11 @@
 {
   "name": "crowdhandler-sdk",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "",
   "homepage": "https://www.crowdhandler.com",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Crowdhandler/crowdhandler-javascript-sdk"
+    "url": "git+https://github.com/Crowdhandler/crowdhandler-javascript-sdk.git"
   },
   "files": [
     "dist/**"
@@ -20,7 +20,7 @@
     "build:rollup": "rollup -c",
     "build:legacy": "tsc",
     "check:circular": "madge --circular --extensions ts src/",
-    "publish": "npm run build && npm publish --access public",
+    "release": "npm run build && npm publish --access public",
     "test": "jest --coverage",
     "test:watch": "jest --watch",
     "test:server": "node test/local-server/server.js",
