@@ -66,6 +66,9 @@ export interface InitConfig {
       queueActivatesOn?: number;
       timeout?: number;
     }>;
+    
+    /** Whether this is a waiting room implementation (default: false) */
+    waitingRoom?: boolean;
   };
 }
 
@@ -201,7 +204,8 @@ export function init(config: InitConfig): InitResult {
       fallbackSlug: config.options?.fallbackSlug,
       cookieName: config.options?.cookieName,
       liteValidator: config.options?.liteValidator,
-      roomsConfig: config.options?.roomsConfig
+      roomsConfig: config.options?.roomsConfig,
+      waitingRoom: config.options?.waitingRoom
     };
     
     // Create gatekeeper using the public client from our unified client

@@ -8,7 +8,6 @@ export declare class Gatekeeper {
     private WAIT_URL;
     readonly STORAGE_NAME: string;
     readonly REQUEST: any;
-    inWaitingRoom: boolean;
     private ignore;
     private hashedPrivateKey;
     private publicKey;
@@ -33,6 +32,7 @@ export declare class Gatekeeper {
     agent: string | undefined;
     ip: string | undefined;
     lang: string | undefined;
+    slug: string | undefined;
     sessionStatus: z.infer<typeof SessionStatusWrapper> | undefined;
     private requested;
     private deployment;
@@ -107,9 +107,16 @@ export declare class Gatekeeper {
      */
     private extractTokenFromSimpleCookie;
     /**
-     * Determines whether to use the slug or the domain to store the token, setting the storageKey accordingly.
+     * Extracts the slug from the URL path when in waiting room mode.
+     * If the first path segment is 'ch', the slug is in the second segment.
+     * Otherwise, the slug is the first path segment.
      */
-    private findStorageKey;
+    private extractSlugFromPath;
+    /**
+     * Extracts the target URL from query parameters when in waiting room mode.
+     * Returns the encoded URL value if found, otherwise returns empty string.
+     */
+    private extractUrlFromWaitingRoomQuery;
     /**
      * Retrieves the token from local storage if possible.
      * @throws {Error} When the storage key or local storage value is undefined.
@@ -134,6 +141,19 @@ export declare class Gatekeeper {
      * }
      */
     redirectIfNotPromoted(): string;
+    /**
+     * Redirects promoted users from waiting room to target site with fresh CrowdHandler parameters.
+     * Used when waitingRoom option is true and user is promoted.
+     *
+     * @returns {string} Success message after redirect
+     * @throws {Error} If unable to determine redirect URL
+     *
+     * @example
+     * if (result.promoted && config.waitingRoom) {
+     *   return gatekeeper.redirectIfPromoted();
+     * }
+     */
+    redirectIfPromoted(): string;
     /**
      * Redirects the request to the decoded target URL.
      *
@@ -295,6 +315,7 @@ export declare class Gatekeeper {
         deployment?: string | undefined;
         hash?: string | null | undefined;
         token?: string | undefined;
+        requested?: string | undefined;
         liteValidatorRedirect?: boolean | undefined;
         liteValidatorUrl?: string | undefined;
     } | undefined>;

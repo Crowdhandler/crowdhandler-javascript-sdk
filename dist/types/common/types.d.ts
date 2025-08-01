@@ -73,6 +73,7 @@ export declare const GatekeeperOptions: z.ZodObject<{
         queueActivatesOn?: number | undefined;
         timeout?: number | undefined;
     }>, "many">>;
+    waitingRoom: z.ZodOptional<z.ZodBoolean>;
 }, "strip", z.ZodTypeAny, {
     debug?: boolean | undefined;
     fallbackSlug?: string | undefined;
@@ -89,6 +90,7 @@ export declare const GatekeeperOptions: z.ZodObject<{
         queueActivatesOn?: number | undefined;
         timeout?: number | undefined;
     }[] | undefined;
+    waitingRoom?: boolean | undefined;
 }, {
     debug?: boolean | undefined;
     fallbackSlug?: string | undefined;
@@ -105,6 +107,7 @@ export declare const GatekeeperOptions: z.ZodObject<{
         queueActivatesOn?: number | undefined;
         timeout?: number | undefined;
     }[] | undefined;
+    waitingRoom?: boolean | undefined;
 }>;
 export declare const GatekeeperKeyPair: z.ZodObject<{
     publicKey: z.ZodString;
@@ -156,6 +159,25 @@ export declare const SpecialParametersObject: z.ZodObject<{
     chIDSignature: string;
     chPublicKey: string;
     chRequested: string;
+}>;
+export declare const SessionRequestConfig: z.ZodObject<{
+    agent: z.ZodOptional<z.ZodString>;
+    ip: z.ZodOptional<z.ZodString>;
+    lang: z.ZodOptional<z.ZodString>;
+    url: z.ZodOptional<z.ZodString>;
+    slug: z.ZodOptional<z.ZodString>;
+}, "strip", z.ZodTypeAny, {
+    agent?: string | undefined;
+    ip?: string | undefined;
+    lang?: string | undefined;
+    url?: string | undefined;
+    slug?: string | undefined;
+}, {
+    agent?: string | undefined;
+    ip?: string | undefined;
+    lang?: string | undefined;
+    url?: string | undefined;
+    slug?: string | undefined;
 }>;
 export declare const ProcessURLResultObject: z.ZodObject<{
     targetURL: z.ZodString;
@@ -409,6 +431,7 @@ export declare const ValidateRequestObject: z.ZodObject<{
     deployment: z.ZodOptional<z.ZodString>;
     hash: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     token: z.ZodOptional<z.ZodString>;
+    requested: z.ZodOptional<z.ZodString>;
     liteValidatorRedirect: z.ZodOptional<z.ZodBoolean>;
     liteValidatorUrl: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
@@ -424,6 +447,7 @@ export declare const ValidateRequestObject: z.ZodObject<{
     deployment?: string | undefined;
     hash?: string | null | undefined;
     token?: string | undefined;
+    requested?: string | undefined;
     liteValidatorRedirect?: boolean | undefined;
     liteValidatorUrl?: string | undefined;
 }, {
@@ -439,6 +463,7 @@ export declare const ValidateRequestObject: z.ZodObject<{
     deployment?: string | undefined;
     hash?: string | null | undefined;
     token?: string | undefined;
+    requested?: string | undefined;
     liteValidatorRedirect?: boolean | undefined;
     liteValidatorUrl?: string | undefined;
 }>;
@@ -471,18 +496,24 @@ export declare const SessionStatusWrapper: z.ZodObject<{
         status: z.ZodNullable<z.ZodNumber>;
         slug: z.ZodOptional<z.ZodNullable<z.ZodString>>;
         token: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        urlRedirect: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        requested: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     }, "strip", z.ZodAny, z.objectOutputType<{
         hash: z.ZodOptional<z.ZodNullable<z.ZodString>>;
         promoted: z.ZodNullable<z.ZodNumber>;
         status: z.ZodNullable<z.ZodNumber>;
         slug: z.ZodOptional<z.ZodNullable<z.ZodString>>;
         token: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        urlRedirect: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        requested: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     }, z.ZodAny, "strip">, z.objectInputType<{
         hash: z.ZodOptional<z.ZodNullable<z.ZodString>>;
         promoted: z.ZodNullable<z.ZodNumber>;
         status: z.ZodNullable<z.ZodNumber>;
         slug: z.ZodOptional<z.ZodNullable<z.ZodString>>;
         token: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        urlRedirect: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        requested: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     }, z.ZodAny, "strip">>;
 }, "strip", z.ZodTypeAny, {
     result: {
@@ -491,6 +522,8 @@ export declare const SessionStatusWrapper: z.ZodObject<{
         hash?: string | null | undefined;
         slug?: string | null | undefined;
         token?: string | null | undefined;
+        urlRedirect?: string | null | undefined;
+        requested?: string | null | undefined;
     } & {
         [k: string]: any;
     };
@@ -501,6 +534,8 @@ export declare const SessionStatusWrapper: z.ZodObject<{
         hash?: string | null | undefined;
         slug?: string | null | undefined;
         token?: string | null | undefined;
+        urlRedirect?: string | null | undefined;
+        requested?: string | null | undefined;
     } & {
         [k: string]: any;
     };

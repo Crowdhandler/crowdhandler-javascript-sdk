@@ -1,5 +1,5 @@
 /**
- * CrowdHandler JavaScript SDK v2.1.1
+ * CrowdHandler JavaScript SDK v2.1.3
  * (c) 2025 CrowdHandler
  * @license ISC
  */
@@ -1916,7 +1916,8 @@ zod.z.object({
     trustOnFail: zod.z.boolean().optional(),
     cookieName: zod.z.string().optional(),
     liteValidator: zod.z.boolean().optional(),
-    roomsConfig: RoomsConfig.optional(), // Array of room configs
+    roomsConfig: RoomsConfig.optional(),
+    waitingRoom: zod.z.boolean().optional(),
 });
 zod.z.object({
     publicKey: zod.z.string(),
@@ -1938,6 +1939,14 @@ var SpecialParametersObject = zod.z.object({
     chIDSignature: zod.z.string(),
     chPublicKey: zod.z.string(),
     chRequested: zod.z.string(),
+});
+// Request configuration for session status API calls
+zod.z.object({
+    agent: zod.z.string().optional(),
+    ip: zod.z.string().optional(),
+    lang: zod.z.string().optional(),
+    url: zod.z.string().optional(),
+    slug: zod.z.string().optional(),
 });
 zod.z.object({
     targetURL: zod.z.string(),
@@ -2022,6 +2031,7 @@ zod.z.object({
     deployment: zod.z.string().optional(),
     hash: zod.z.string().nullable().optional(),
     token: zod.z.string().optional(),
+    requested: zod.z.string().optional(),
     liteValidatorRedirect: zod.z.boolean().optional(),
     liteValidatorUrl: zod.z.string().optional(),
 });
@@ -2039,6 +2049,8 @@ zod.z.object({
         status: zod.z.number().nullable(),
         slug: zod.z.string().nullable().optional(),
         token: zod.z.string().nullable().optional(),
+        urlRedirect: zod.z.string().nullable().optional(),
+        requested: zod.z.string().nullable().optional(),
     })
         .catchall(zod.z.any()),
 });
@@ -2497,7 +2509,6 @@ var Timer = /** @class */ (function () {
 var Gatekeeper = /** @class */ (function () {
     function Gatekeeper(PublicClient, request, keyPair, options) {
         this.WAIT_URL = "https://wait.crowdhandler.com";
-        this.inWaitingRoom = false;
         this.ignore = /^((?!.*\?).*(\.(avi|css|eot|gif|ico|jpg|jpeg|js|json|mov|mp4|mpeg|mpg|og[g|v]|pdf|png|svg|ttf|txt|wmv|woff|woff2|xml))$)/;
         this.options = {
             debug: false,
@@ -2505,6 +2516,7 @@ var Gatekeeper = /** @class */ (function () {
             mode: "full",
             timeout: 5000,
             trustOnFail: true,
+            waitingRoom: false,
         };
         this.cookies = [];
         this.simpleSignature = [];
@@ -2547,9 +2559,9 @@ var Gatekeeper = /** @class */ (function () {
         }
         //Start the timer
         this.timer = new Timer();
-        //If host is wait.crowdhandler.com, wait-dev.crowdhandler.com or path starts with /ch/ then we're in the waiting room
-        if (this.host === "wait.crowdhandler.com" || this.path.startsWith("/ch/")) {
-            this.inWaitingRoom = true;
+        // Extract slug if this is a waiting room implementation
+        if (this.options.waitingRoom) {
+            this.extractSlugFromPath();
         }
     }
     //Set the host using your own method if you're not happy with the default
@@ -2625,16 +2637,28 @@ var Gatekeeper = /** @class */ (function () {
      */
     Gatekeeper.prototype.getSessionStatus = function () {
         return __awaiter(this, void 0, void 0, function () {
-            var requestConfig, _a, error_1, _b, error_2;
+            var requestConfig, url, _a, error_1, _b, error_2;
             return __generator(this, function (_c) {
                 switch (_c.label) {
                     case 0:
-                        requestConfig = {
-                            agent: this.agent,
-                            ip: this.ip,
-                            lang: this.lang,
-                            url: "https://".concat(this.host).concat(this.path),
-                        };
+                        requestConfig = {};
+                        // Always include these if they exist
+                        if (this.agent)
+                            requestConfig.agent = this.agent;
+                        if (this.ip)
+                            requestConfig.ip = this.ip;
+                        if (this.lang)
+                            requestConfig.lang = this.lang;
+                        // Include either slug OR url, but not both
+                        if (this.slug) {
+                            requestConfig.slug = this.slug;
+                            logger(this.options.debug, "info", "Using slug in request: ".concat(this.slug));
+                        }
+                        else {
+                            url = "https://".concat(this.host).concat(this.path);
+                            requestConfig.url = url;
+                            logger(this.options.debug, "info", "Using URL in request: ".concat(url));
+                        }
                         if (!this.token) return [3 /*break*/, 5];
                         logger(this.options.debug, "info", "Token found, performing a session GET call.");
                         _c.label = 1;
@@ -2677,6 +2701,22 @@ var Gatekeeper = /** @class */ (function () {
             var processURLInstance = new ProcessURL(this.REQUEST);
             var result = processURLInstance.parseURL();
             if (result) {
+                // If this is a waiting room implementation, check for url parameter
+                if (this.options.waitingRoom) {
+                    var urlFromQuery = this.extractUrlFromWaitingRoomQuery();
+                    if (urlFromQuery) {
+                        logger(this.options.debug, "info", "[WaitingRoom] Using url from query parameter: ".concat(urlFromQuery));
+                        this.targetURL = urlFromQuery;
+                        this.specialParameters = result.specialParameters;
+                        return;
+                    }
+                    // If no url param, targetURL will be set from API response urlRedirect
+                    logger(this.options.debug, "info", "[WaitingRoom] No url query parameter found, will use urlRedirect from API response");
+                    this.targetURL = ""; // Empty until we get API response
+                    this.specialParameters = result.specialParameters;
+                    return;
+                }
+                // Standard behavior - use the current URL as targetURL
                 this.targetURL = result.targetURL;
                 this.specialParameters = result.specialParameters;
             }
@@ -2799,34 +2839,67 @@ var Gatekeeper = /** @class */ (function () {
         }
     };
     /**
-     * Determines whether to use the slug or the domain to store the token, setting the storageKey accordingly.
+     * Extracts the slug from the URL path when in waiting room mode.
+     * If the first path segment is 'ch', the slug is in the second segment.
+     * Otherwise, the slug is the first path segment.
      */
-    Gatekeeper.prototype.findStorageKey = function () {
-        var key;
-        if (this.inWaitingRoom) {
-            // Prioritise slug over domain if both are present.
-            var isWhiteLabel = !this.host.startsWith("wait");
-            var pathParts = this.path.split("/");
-            if (isWhiteLabel) {
-                // Extracts 1CB20oWp8dbA from format /ch/1CB20oWp8dbA?foo=bar
-                key = pathParts[2].split("?")[0];
+    Gatekeeper.prototype.extractSlugFromPath = function () {
+        try {
+            // Remove leading slash and query string, then split by /
+            var pathWithoutQuery = this.path.split('?')[0];
+            var cleanPath = pathWithoutQuery.startsWith('/') ? pathWithoutQuery.slice(1) : pathWithoutQuery;
+            var segments = cleanPath.split('/').filter(function (s) { return s.length > 0; });
+            if (segments.length === 0) {
+                logger(this.options.debug, "info", "[WaitingRoom] No path segments found for slug extraction");
+                return;
             }
-            else {
-                // Extracts 1CB20oWp8dbA from format /1CB20oWp8dbA?foo=bar
-                key = pathParts[1].split("?")[0];
+            var slugIndex = 0;
+            // If first segment is 'ch', slug is in the second segment
+            if (segments[0] === 'ch') {
+                slugIndex = 1;
+                if (segments.length <= 1) {
+                    logger(this.options.debug, "info", "[WaitingRoom] Path starts with /ch/ but no slug segment found");
+                    return;
+                }
             }
-            // If we still don't have a key, try to get it from the url parameter.
-            // This will be the case if we're in the waiting room and the slug is not present.
-            if (!key) {
-                var params = new URLSearchParams(this.path.split("?")[1]);
-                key = params.get("url") || undefined;
-            }
+            this.slug = segments[slugIndex];
+            logger(this.options.debug, "info", "[WaitingRoom] Extracted slug from path: ".concat(this.slug));
         }
-        else {
-            // If we're not in the waiting room, we can just use the domain as the key.
-            key = this.host;
+        catch (error) {
+            logger(this.options.debug, "error", "[WaitingRoom] Failed to extract slug from path: ".concat(error));
         }
-        this.storageKey = key;
+    };
+    /**
+     * Extracts the target URL from query parameters when in waiting room mode.
+     * Returns the encoded URL value if found, otherwise returns empty string.
+     */
+    Gatekeeper.prototype.extractUrlFromWaitingRoomQuery = function () {
+        try {
+            // Get the full URL including query parameters
+            var fullPath = this.REQUEST.getPath();
+            if (!fullPath || !fullPath.includes('?')) {
+                return "";
+            }
+            // Extract query string
+            var queryString = fullPath.split('?')[1];
+            if (!queryString) {
+                return "";
+            }
+            // Parse query parameters manually to avoid automatic decoding
+            // URLSearchParams.get() automatically decodes values, which we don't want
+            var urlMatch = queryString.match(/(?:^|&)url=([^&]*)/);
+            if (urlMatch && urlMatch[1]) {
+                var urlParam = urlMatch[1];
+                // The URL parameter value is encoded, return as-is without decoding
+                logger(this.options.debug, "info", "[WaitingRoom] Found url parameter (encoded): ".concat(urlParam));
+                return urlParam;
+            }
+            return "";
+        }
+        catch (error) {
+            logger(this.options.debug, "error", "[WaitingRoom] Failed to extract url from query: ".concat(error));
+            return "";
+        }
     };
     /**
      * Retrieves the token from local storage if possible.
@@ -2881,6 +2954,69 @@ var Gatekeeper = /** @class */ (function () {
         }
         catch (error) {
             logger(this.options.debug, "error", "Failed to redirect: ".concat(error));
+            return "Redirect failed: ".concat(error.message);
+        }
+    };
+    /**
+     * Redirects promoted users from waiting room to target site with fresh CrowdHandler parameters.
+     * Used when waitingRoom option is true and user is promoted.
+     *
+     * @returns {string} Success message after redirect
+     * @throws {Error} If unable to determine redirect URL
+     *
+     * @example
+     * if (result.promoted && config.waitingRoom) {
+     *   return gatekeeper.redirectIfPromoted();
+     * }
+     */
+    Gatekeeper.prototype.redirectIfPromoted = function () {
+        var _a, _b, _c, _d, _e, _f;
+        try {
+            // Get target URL from either this.targetURL or API response
+            var destinationUrl = this.targetURL;
+            // If no targetURL and we have session status with urlRedirect, use that
+            if (!destinationUrl && ((_b = (_a = this.sessionStatus) === null || _a === void 0 ? void 0 : _a.result) === null || _b === void 0 ? void 0 : _b.urlRedirect)) {
+                destinationUrl = encodeURIComponent(this.sessionStatus.result.urlRedirect);
+                logger(this.options.debug, "info", "[WaitingRoom] Using urlRedirect from API: ".concat(this.sessionStatus.result.urlRedirect));
+            }
+            if (!destinationUrl) {
+                throw new Error("Unable to determine destination URL for promoted redirect");
+            }
+            // Decode once to get the actual URL
+            var decodedURL = decodeURIComponent(destinationUrl);
+            // Parse URL to handle parameters properly
+            var urlParts = decodedURL.split('?');
+            var baseUrl = urlParts[0];
+            var queryString = urlParts[1] || '';
+            // Parse existing parameters while preserving their values
+            var existingParams = [];
+            if (queryString) {
+                var params = queryString.split('&');
+                for (var _i = 0, params_1 = params; _i < params_1.length; _i++) {
+                    var param = params_1[_i];
+                    var key = param.split('=')[0];
+                    // Skip CrowdHandler parameters
+                    if (!['ch-id', 'ch-id-signature', 'ch-requested', 'ch-code', 'ch-fresh'].includes(key)) {
+                        existingParams.push(param);
+                    }
+                }
+            }
+            // Build new CrowdHandler parameters
+            var chParams = [
+                "ch-id=".concat(encodeURIComponent(this.token || '')),
+                "ch-id-signature=".concat(encodeURIComponent(((_d = (_c = this.sessionStatus) === null || _c === void 0 ? void 0 : _c.result) === null || _d === void 0 ? void 0 : _d.hash) || '')),
+                "ch-requested=".concat(encodeURIComponent(((_f = (_e = this.sessionStatus) === null || _e === void 0 ? void 0 : _e.result) === null || _f === void 0 ? void 0 : _f.requested) || this.requested || this.specialParameters.chRequested || '')),
+                "ch-code=".concat(encodeURIComponent(this.specialParameters.chCode || '')),
+                "ch-fresh=true"
+            ];
+            // Construct final URL
+            var allParams = existingParams.concat(chParams);
+            var finalUrl = baseUrl + (allParams.length > 0 ? '?' + allParams.join('&') : '');
+            logger(this.options.debug, "info", "[WaitingRoom] Redirecting promoted user to: ".concat(finalUrl));
+            return this.REQUEST.redirect(finalUrl);
+        }
+        catch (error) {
+            logger(this.options.debug, "error", "Failed to redirect promoted user: ".concat(error));
             return "Redirect failed: ".concat(error.message);
         }
     };
@@ -3387,7 +3523,7 @@ var Gatekeeper = /** @class */ (function () {
     Gatekeeper.prototype.validateRequestClientSideMode = function () {
         var _a;
         return __awaiter(this, void 0, void 0, function () {
-            var result, liteCheck, sessionStatusType, _b, promoted, slug, token, responseID, deployment, hash, error_3;
+            var result, liteCheck, sessionStatusType, _b, promoted, slug, token, responseID, deployment, hash, requested, error_3;
             return __generator(this, function (_c) {
                 switch (_c.label) {
                     case 0:
@@ -3403,6 +3539,7 @@ var Gatekeeper = /** @class */ (function () {
                             deployment: "",
                             hash: null,
                             token: "",
+                            requested: "",
                         };
                         _c.label = 1;
                     case 1:
@@ -3450,13 +3587,14 @@ var Gatekeeper = /** @class */ (function () {
                         }
                         // Processing based on promotion status
                         if (this.sessionStatus) {
-                            _b = this.sessionStatus.result, promoted = _b.promoted, slug = _b.slug, token = _b.token, responseID = _b.responseID, deployment = _b.deployment, hash = _b.hash;
+                            _b = this.sessionStatus.result, promoted = _b.promoted, slug = _b.slug, token = _b.token, responseID = _b.responseID, deployment = _b.deployment, hash = _b.hash, requested = _b.requested;
                             result.promoted = promoted === 1;
                             result.slug = slug || result.slug;
                             this.token = token || this.token;
                             result.token = token || result.token;
                             result.deployment = deployment || result.deployment;
                             result.hash = hash || null;
+                            result.requested = requested || result.requested;
                             // Always set cookie if we have a token (for both promoted and non-promoted users)
                             if (token) {
                                 result.setCookie = true;
@@ -3488,7 +3626,7 @@ var Gatekeeper = /** @class */ (function () {
     Gatekeeper.prototype.validateRequestFullMode = function () {
         var _a;
         return __awaiter(this, void 0, void 0, function () {
-            var result, liteCheck, sessionStatusType, _b, promoted, slug, token, responseID, deployment, hash, error_4;
+            var result, liteCheck, sessionStatusType, _b, promoted, slug, token, responseID, deployment, hash, requested, error_4;
             return __generator(this, function (_c) {
                 switch (_c.label) {
                     case 0:
@@ -3504,6 +3642,7 @@ var Gatekeeper = /** @class */ (function () {
                             deployment: "",
                             hash: null,
                             token: "",
+                            requested: "",
                         };
                         _c.label = 1;
                     case 1:
@@ -3551,13 +3690,14 @@ var Gatekeeper = /** @class */ (function () {
                         }
                         // Processing based on promotion status
                         if (this.sessionStatus) {
-                            _b = this.sessionStatus.result, promoted = _b.promoted, slug = _b.slug, token = _b.token, responseID = _b.responseID, deployment = _b.deployment, hash = _b.hash;
+                            _b = this.sessionStatus.result, promoted = _b.promoted, slug = _b.slug, token = _b.token, responseID = _b.responseID, deployment = _b.deployment, hash = _b.hash, requested = _b.requested;
                             result.promoted = promoted === 1;
                             result.slug = slug || result.slug;
                             this.token = token || this.token;
                             result.token = token || result.token;
                             result.deployment = deployment || result.deployment;
                             result.hash = hash || null;
+                            result.requested = requested || result.requested;
                             // Always set cookie if we have a token (for both promoted and non-promoted users)
                             if (token) {
                                 result.setCookie = true;
@@ -3607,6 +3747,7 @@ var Gatekeeper = /** @class */ (function () {
                             deployment: "",
                             hash: null,
                             token: "",
+                            requested: "",
                         };
                         logger(this.options.debug, "info", "IP: " + this.ip);
                         logger(this.options.debug, "info", "Agent: " + this.agent);
@@ -3862,7 +4003,7 @@ var Gatekeeper = /** @class */ (function () {
 
 // Implementation
 function init(config) {
-    var _a, _b, _c, _d, _e, _f, _g;
+    var _a, _b, _c, _d, _e, _f, _g, _h;
     // Validate configuration
     if (!config.publicKey) {
         throw new CrowdHandlerError(ErrorCodes.INVALID_CONFIG, 'publicKey is required', 'Provide your public key from the CrowdHandler dashboard: crowdhandler.init({ publicKey: "YOUR_KEY" })');
@@ -3908,7 +4049,8 @@ function init(config) {
             fallbackSlug: (_d = config.options) === null || _d === void 0 ? void 0 : _d.fallbackSlug,
             cookieName: (_e = config.options) === null || _e === void 0 ? void 0 : _e.cookieName,
             liteValidator: (_f = config.options) === null || _f === void 0 ? void 0 : _f.liteValidator,
-            roomsConfig: (_g = config.options) === null || _g === void 0 ? void 0 : _g.roomsConfig
+            roomsConfig: (_g = config.options) === null || _g === void 0 ? void 0 : _g.roomsConfig,
+            waitingRoom: (_h = config.options) === null || _h === void 0 ? void 0 : _h.waitingRoom
         };
         // Create gatekeeper using the public client from our unified client
         gatekeeper = new Gatekeeper(client.getPublicClient(), context, {

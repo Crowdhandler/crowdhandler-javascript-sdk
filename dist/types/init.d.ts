@@ -48,6 +48,8 @@ export interface InitConfig {
             queueActivatesOn?: number;
             timeout?: number;
         }>;
+        /** Whether this is a waiting room implementation (default: false) */
+        waitingRoom?: boolean;
     };
 }
 /**

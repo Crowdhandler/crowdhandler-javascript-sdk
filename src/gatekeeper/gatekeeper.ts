@@ -28,6 +28,7 @@ import {
   LocalStorageOptions,
   ProcessURLResultObject,
   RoomConfig,
+  SessionRequestConfig,
 } from "../common/types";
 import { generateSignature } from "../common/hash";
 
@@ -36,7 +37,6 @@ export class Gatekeeper {
   private WAIT_URL: string = "https://wait.crowdhandler.com";
   public readonly STORAGE_NAME: string;
   public readonly REQUEST: any;
-  public inWaitingRoom: boolean = false;
   private ignore: RegExp =
     /^((?!.*\?).*(\.(avi|css|eot|gif|ico|jpg|jpeg|js|json|mov|mp4|mpeg|mpg|og[g|v]|pdf|png|svg|ttf|txt|wmv|woff|woff2|xml))$)/;
   private hashedPrivateKey!: string;
@@ -48,6 +48,7 @@ export class Gatekeeper {
     mode: "full",
     timeout: 5000,
     trustOnFail: true,
+    waitingRoom: false,
   };
   public activeConfig!: z.infer<typeof RoomMetaObject>;
   public cookies: Array<string> = [];
@@ -72,6 +73,7 @@ export class Gatekeeper {
   public agent: string | undefined;
   public ip: string | undefined;
   public lang: string | undefined;
+  public slug: string | undefined;
   public sessionStatus: z.infer<typeof SessionStatusWrapper> | undefined;
   private requested: string | undefined;
   private deployment: string | undefined;
@@ -135,9 +137,9 @@ export class Gatekeeper {
     //Start the timer
     this.timer = new Timer();
 
-    //If host is wait.crowdhandler.com, wait-dev.crowdhandler.com or path starts with /ch/ then we're in the waiting room
-    if (this.host === "wait.crowdhandler.com" || this.path.startsWith("/ch/")) {
-      this.inWaitingRoom = true;
+    // Extract slug if this is a waiting room implementation
+    if (this.options.waitingRoom) {
+      this.extractSlugFromPath();
     }
   }
 
@@ -219,12 +221,24 @@ export class Gatekeeper {
    * @returns {Promise<void>} A Promise that resolves when the method has completed.
    */
   public async getSessionStatus(): Promise<void> {
-    const requestConfig = {
-      agent: this.agent,
-      ip: this.ip,
-      lang: this.lang,
-      url: `https://${this.host}${this.path}`,
-    };
+    // Build request config conditionally
+    const requestConfig: z.infer<typeof SessionRequestConfig> = {};
+    
+    // Always include these if they exist
+    if (this.agent) requestConfig.agent = this.agent;
+    if (this.ip) requestConfig.ip = this.ip;
+    if (this.lang) requestConfig.lang = this.lang;
+    
+    // Include either slug OR url, but not both
+    if (this.slug) {
+      requestConfig.slug = this.slug;
+      logger(this.options.debug, "info", `Using slug in request: ${this.slug}`);
+    } else {
+      // Only include URL if we don't have a slug
+      const url = `https://${this.host}${this.path}`;
+      requestConfig.url = url;
+      logger(this.options.debug, "info", `Using URL in request: ${url}`);
+    }
 
     if (this.token) {
       logger(
@@ -273,6 +287,31 @@ export class Gatekeeper {
       const result: z.infer<typeof ProcessURLResultObject> =
         processURLInstance.parseURL();
       if (result) {
+        // If this is a waiting room implementation, check for url parameter
+        if (this.options.waitingRoom) {
+          const urlFromQuery = this.extractUrlFromWaitingRoomQuery();
+          if (urlFromQuery) {
+            logger(
+              this.options.debug,
+              "info",
+              `[WaitingRoom] Using url from query parameter: ${urlFromQuery}`
+            );
+            this.targetURL = urlFromQuery;
+            this.specialParameters = result.specialParameters;
+            return;
+          }
+          // If no url param, targetURL will be set from API response urlRedirect
+          logger(
+            this.options.debug,
+            "info",
+            "[WaitingRoom] No url query parameter found, will use urlRedirect from API response"
+          );
+          this.targetURL = ""; // Empty until we get API response
+          this.specialParameters = result.specialParameters;
+          return;
+        }
+        
+        // Standard behavior - use the current URL as targetURL
         this.targetURL = result.targetURL;
         this.specialParameters = result.specialParameters;
       } else {
@@ -424,37 +463,88 @@ export class Gatekeeper {
   }
 
   /**
-   * Determines whether to use the slug or the domain to store the token, setting the storageKey accordingly.
+   * Extracts the slug from the URL path when in waiting room mode.
+   * If the first path segment is 'ch', the slug is in the second segment.
+   * Otherwise, the slug is the first path segment.
    */
-  private findStorageKey(): void {
-    let key: string | undefined;
-
-    if (this.inWaitingRoom) {
-      // Prioritise slug over domain if both are present.
-      const isWhiteLabel = !this.host.startsWith("wait");
-
-      const pathParts = this.path.split("/");
-
-      if (isWhiteLabel) {
-        // Extracts 1CB20oWp8dbA from format /ch/1CB20oWp8dbA?foo=bar
-        key = pathParts[2].split("?")[0];
-      } else {
-        // Extracts 1CB20oWp8dbA from format /1CB20oWp8dbA?foo=bar
-        key = pathParts[1].split("?")[0];
+  private extractSlugFromPath(): void {
+    try {
+      // Remove leading slash and query string, then split by /
+      const pathWithoutQuery = this.path.split('?')[0];
+      const cleanPath = pathWithoutQuery.startsWith('/') ? pathWithoutQuery.slice(1) : pathWithoutQuery;
+      const segments = cleanPath.split('/').filter(s => s.length > 0);
+      
+      if (segments.length === 0) {
+        logger(this.options.debug, "info", "[WaitingRoom] No path segments found for slug extraction");
+        return;
       }
-
-      // If we still don't have a key, try to get it from the url parameter.
-      // This will be the case if we're in the waiting room and the slug is not present.
-      if (!key) {
-        const params = new URLSearchParams(this.path.split("?")[1]);
-        key = params.get("url") || undefined;
+      
+      let slugIndex = 0;
+      
+      // If first segment is 'ch', slug is in the second segment
+      if (segments[0] === 'ch') {
+        slugIndex = 1;
+        
+        if (segments.length <= 1) {
+          logger(this.options.debug, "info", "[WaitingRoom] Path starts with /ch/ but no slug segment found");
+          return;
+        }
       }
-    } else {
-      // If we're not in the waiting room, we can just use the domain as the key.
-      key = this.host;
+      
+      this.slug = segments[slugIndex];
+      logger(this.options.debug, "info", `[WaitingRoom] Extracted slug from path: ${this.slug}`);
+      
+    } catch (error: any) {
+      logger(
+        this.options.debug,
+        "error",
+        `[WaitingRoom] Failed to extract slug from path: ${error}`
+      );
     }
+  }
 
-    this.storageKey = key;
+  /**
+   * Extracts the target URL from query parameters when in waiting room mode.
+   * Returns the encoded URL value if found, otherwise returns empty string.
+   */
+  private extractUrlFromWaitingRoomQuery(): string {
+    try {
+      // Get the full URL including query parameters
+      const fullPath = this.REQUEST.getPath();
+      if (!fullPath || !fullPath.includes('?')) {
+        return "";
+      }
+
+      // Extract query string
+      const queryString = fullPath.split('?')[1];
+      if (!queryString) {
+        return "";
+      }
+
+      // Parse query parameters manually to avoid automatic decoding
+      // URLSearchParams.get() automatically decodes values, which we don't want
+      const urlMatch = queryString.match(/(?:^|&)url=([^&]*)/);
+      
+      if (urlMatch && urlMatch[1]) {
+        const urlParam = urlMatch[1];
+        // The URL parameter value is encoded, return as-is without decoding
+        logger(
+          this.options.debug,
+          "info",
+          `[WaitingRoom] Found url parameter (encoded): ${urlParam}`
+        );
+        return urlParam;
+      }
+
+      return "";
+    } catch (error: any) {
+      logger(
+        this.options.debug,
+        "error",
+        `[WaitingRoom] Failed to extract url from query: ${error}`
+      );
+      return "";
+    }
   }
 
   /**
@@ -534,6 +624,83 @@ export class Gatekeeper {
       return this.REQUEST.redirect(redirectUrl);
     } catch (error: any) {
       logger(this.options.debug, "error", `Failed to redirect: ${error}`);
+      return `Redirect failed: ${error.message}`;
+    }
+  }
+
+  /**
+   * Redirects promoted users from waiting room to target site with fresh CrowdHandler parameters.
+   * Used when waitingRoom option is true and user is promoted.
+   * 
+   * @returns {string} Success message after redirect
+   * @throws {Error} If unable to determine redirect URL
+   * 
+   * @example
+   * if (result.promoted && config.waitingRoom) {
+   *   return gatekeeper.redirectIfPromoted();
+   * }
+   */
+  public redirectIfPromoted(): string {
+    try {
+      // Get target URL from either this.targetURL or API response
+      let destinationUrl = this.targetURL;
+      
+      // If no targetURL and we have session status with urlRedirect, use that
+      if (!destinationUrl && this.sessionStatus?.result?.urlRedirect) {
+        destinationUrl = encodeURIComponent(this.sessionStatus.result.urlRedirect);
+        logger(
+          this.options.debug,
+          "info",
+          `[WaitingRoom] Using urlRedirect from API: ${this.sessionStatus.result.urlRedirect}`
+        );
+      }
+
+      if (!destinationUrl) {
+        throw new Error("Unable to determine destination URL for promoted redirect");
+      }
+
+      // Decode once to get the actual URL
+      const decodedURL = decodeURIComponent(destinationUrl);
+
+      // Parse URL to handle parameters properly
+      const urlParts = decodedURL.split('?');
+      const baseUrl = urlParts[0];
+      const queryString = urlParts[1] || '';
+
+      // Parse existing parameters while preserving their values
+      const existingParams: string[] = [];
+      if (queryString) {
+        const params = queryString.split('&');
+        for (const param of params) {
+          const [key] = param.split('=');
+          // Skip CrowdHandler parameters
+          if (!['ch-id', 'ch-id-signature', 'ch-requested', 'ch-code', 'ch-fresh'].includes(key)) {
+            existingParams.push(param);
+          }
+        }
+      }
+
+      // Build new CrowdHandler parameters
+      const chParams = [
+        `ch-id=${encodeURIComponent(this.token || '')}`,
+        `ch-id-signature=${encodeURIComponent(this.sessionStatus?.result?.hash || '')}`,
+        `ch-requested=${encodeURIComponent(this.sessionStatus?.result?.requested || this.requested || this.specialParameters.chRequested || '')}`,
+        `ch-code=${encodeURIComponent(this.specialParameters.chCode || '')}`,
+        `ch-fresh=true`
+      ];
+
+      // Construct final URL
+      const allParams = existingParams.concat(chParams);
+      const finalUrl = baseUrl + (allParams.length > 0 ? '?' + allParams.join('&') : '');
+      logger(
+        this.options.debug,
+        "info",
+        `[WaitingRoom] Redirecting promoted user to: ${finalUrl}`
+      );
+
+      return this.REQUEST.redirect(finalUrl);
+    } catch (error: any) {
+      logger(this.options.debug, "error", `Failed to redirect promoted user: ${error}`);
       return `Redirect failed: ${error.message}`;
     }
   }
@@ -1129,6 +1296,7 @@ export class Gatekeeper {
       deployment: "",
       hash: null,
       token: "",
+      requested: "",
     };
 
     try {
@@ -1182,7 +1350,7 @@ export class Gatekeeper {
 
       // Processing based on promotion status
       if (this.sessionStatus) {
-        const { promoted, slug, token, responseID, deployment, hash } = this.sessionStatus.result;
+        const { promoted, slug, token, responseID, deployment, hash, requested } = this.sessionStatus.result;
 
         result.promoted = promoted === 1;
         result.slug = slug || result.slug;
@@ -1190,6 +1358,7 @@ export class Gatekeeper {
         result.token = token || result.token;
         result.deployment = deployment || result.deployment;
         result.hash = hash || null;
+        result.requested = requested || result.requested;
         
         // Always set cookie if we have a token (for both promoted and non-promoted users)
         if (token) {
@@ -1239,6 +1408,7 @@ export class Gatekeeper {
       deployment: "",
       hash: null,
       token: "",
+      requested: "",
     };
 
     try {
@@ -1292,7 +1462,7 @@ export class Gatekeeper {
 
       // Processing based on promotion status
       if (this.sessionStatus) {
-        const { promoted, slug, token, responseID, deployment, hash } = this.sessionStatus.result;
+        const { promoted, slug, token, responseID, deployment, hash, requested } = this.sessionStatus.result;
 
         result.promoted = promoted === 1;
         result.slug = slug || result.slug;
@@ -1300,6 +1470,7 @@ export class Gatekeeper {
         result.token = token || result.token;
         result.deployment = deployment || result.deployment;
         result.hash = hash || null;
+        result.requested = requested || result.requested;
         
         // Always set cookie if we have a token (for both promoted and non-promoted users)
         if (token) {
@@ -1351,6 +1522,7 @@ export class Gatekeeper {
       deployment: "",
       hash: null,
       token: "",
+      requested: "",
     };
 
     logger(this.options.debug, "info", "IP: " + this.ip);
