@@ -22,6 +22,7 @@ export const GatekeeperOptions = z.object({
   cookieName: z.string().optional(),
   liteValidator: z.boolean().optional(),
   roomsConfig: RoomsConfig.optional(), // Array of room configs
+  waitingRoom: z.boolean().optional(),
 });
 
 export const GatekeeperKeyPair = z.object({
@@ -46,6 +47,15 @@ export const SpecialParametersObject = z.object({
   chIDSignature: z.string(),
   chPublicKey: z.string(),
   chRequested: z.string(),
+});
+
+// Request configuration for session status API calls
+export const SessionRequestConfig = z.object({
+  agent: z.string().optional(),
+  ip: z.string().optional(),
+  lang: z.string().optional(),
+  url: z.string().optional(),
+  slug: z.string().optional(),
 });
 
 export const ProcessURLResultObject = z.object({
@@ -146,6 +156,7 @@ export const ValidateRequestObject = z.object({
   deployment: z.string().optional(),
   hash: z.string().nullable().optional(),
   token: z.string().optional(),
+  requested: z.string().optional(),
   liteValidatorRedirect: z.boolean().optional(),
   liteValidatorUrl: z.string().optional(),
 });
@@ -165,6 +176,8 @@ export const SessionStatusWrapper = z.object({
       status: z.number().nullable(),
       slug: z.string().nullable().optional(),
       token: z.string().nullable().optional(),
+      urlRedirect: z.string().nullable().optional(),
+      requested: z.string().nullable().optional(),
     })
     .catchall(z.any()),
 });

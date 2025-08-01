@@ -159,6 +159,7 @@ const result = await gatekeeper.validateRequest();
   deployment: string,     // Deployment identifier from the API
   token: string,          // The session token
   hash: string | null,    // Signature hash for validation (when available)
+  requested: string,      // Timestamp when the request was made
   liteValidatorRedirect: boolean,  // true = redirect to lite validator
   liteValidatorUrl: string         // URL for lite validator redirect
 }
@@ -214,6 +215,19 @@ if (!result.promoted) {
 }
 ```
 
+### gatekeeper.redirectIfPromoted()
+
+Redirects promoted users from a waiting room implementation back to the target site with fresh CrowdHandler parameters. This method is specifically for use in waiting room implementations.
+
+```javascript
+// In waiting room implementation
+if (result.promoted) {
+  return gatekeeper.redirectIfPromoted();
+}
+```
+
+**Use Case:** When building a custom waiting room that runs on your infrastructure, this method handles the redirect back to the protected resource with proper CrowdHandler parameters.
+
 ### gatekeeper.recordPerformance(options?)
 
 Records performance metrics to help CrowdHandler optimize queue flow and capacity.
@@ -265,6 +279,7 @@ const instance = crowdhandler.init({
     trustOnFail: true,    // Allow access if API fails
     fallbackSlug: '',     // Fallback room slug when trustOnFail is false
     cookieName: 'crowdhandler',  // Custom cookie name (default: 'crowdhandler')
+    waitingRoom: false,   // Set to true if SDK is running in a waiting room context
     liteValidator: false, // Enable lite validator mode (default: false)
     roomsConfig: [{       // Array of room configurations for lite validator
       domain: string,     // e.g. 'https://example.com'

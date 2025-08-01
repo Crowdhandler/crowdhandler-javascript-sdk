@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.Modes = exports.RecordPerformanceOptions = exports.SessionStatusWrapper = exports.HttpErrorWrapper = exports.ValidateRequestObject = exports.TokenObjectConstructor = exports.TokenObject = exports.ExtractTokenOptions = exports.SignatureSourceObject = exports.SignatureResponseObject = exports.SignatureObject = exports.RoomMetaObject = exports.LocalStorageOptions = exports.LocalStorageObject = exports.CookieObject = exports.RequestObject = exports.ProcessURLResultObject = exports.SpecialParametersObject = exports.QueryObject = exports.GatekeeperKeyPair = exports.GatekeeperOptions = exports.RoomsConfig = exports.RoomConfig = void 0;
+exports.Modes = exports.RecordPerformanceOptions = exports.SessionStatusWrapper = exports.HttpErrorWrapper = exports.ValidateRequestObject = exports.TokenObjectConstructor = exports.TokenObject = exports.ExtractTokenOptions = exports.SignatureSourceObject = exports.SignatureResponseObject = exports.SignatureObject = exports.RoomMetaObject = exports.LocalStorageOptions = exports.LocalStorageObject = exports.CookieObject = exports.RequestObject = exports.ProcessURLResultObject = exports.SessionRequestConfig = exports.SpecialParametersObject = exports.QueryObject = exports.GatekeeperKeyPair = exports.GatekeeperOptions = exports.RoomsConfig = exports.RoomConfig = void 0;
 var zod_1 = require("zod");
 // Lite Validator types
 exports.RoomConfig = zod_1.z.object({
@@ -21,7 +21,8 @@ exports.GatekeeperOptions = zod_1.z.object({
     trustOnFail: zod_1.z.boolean().optional(),
     cookieName: zod_1.z.string().optional(),
     liteValidator: zod_1.z.boolean().optional(),
-    roomsConfig: exports.RoomsConfig.optional(), // Array of room configs
+    roomsConfig: exports.RoomsConfig.optional(),
+    waitingRoom: zod_1.z.boolean().optional(),
 });
 exports.GatekeeperKeyPair = zod_1.z.object({
     publicKey: zod_1.z.string(),
@@ -43,6 +44,14 @@ exports.SpecialParametersObject = zod_1.z.object({
     chIDSignature: zod_1.z.string(),
     chPublicKey: zod_1.z.string(),
     chRequested: zod_1.z.string(),
+});
+// Request configuration for session status API calls
+exports.SessionRequestConfig = zod_1.z.object({
+    agent: zod_1.z.string().optional(),
+    ip: zod_1.z.string().optional(),
+    lang: zod_1.z.string().optional(),
+    url: zod_1.z.string().optional(),
+    slug: zod_1.z.string().optional(),
 });
 exports.ProcessURLResultObject = zod_1.z.object({
     targetURL: zod_1.z.string(),
@@ -127,6 +136,7 @@ exports.ValidateRequestObject = zod_1.z.object({
     deployment: zod_1.z.string().optional(),
     hash: zod_1.z.string().nullable().optional(),
     token: zod_1.z.string().optional(),
+    requested: zod_1.z.string().optional(),
     liteValidatorRedirect: zod_1.z.boolean().optional(),
     liteValidatorUrl: zod_1.z.string().optional(),
 });
@@ -144,6 +154,8 @@ exports.SessionStatusWrapper = zod_1.z.object({
         status: zod_1.z.number().nullable(),
         slug: zod_1.z.string().nullable().optional(),
         token: zod_1.z.string().nullable().optional(),
+        urlRedirect: zod_1.z.string().nullable().optional(),
+        requested: zod_1.z.string().nullable().optional(),
     })
         .catchall(zod_1.z.any()),
 });

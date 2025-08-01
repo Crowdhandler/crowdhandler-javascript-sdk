@@ -7,7 +7,7 @@ var gatekeeper_1 = require("./gatekeeper/gatekeeper");
 var errors_1 = require("./common/errors");
 // Implementation
 function init(config) {
-    var _a, _b, _c, _d, _e, _f, _g;
+    var _a, _b, _c, _d, _e, _f, _g, _h;
     // Validate configuration
     if (!config.publicKey) {
         throw new errors_1.CrowdHandlerError(errors_1.ErrorCodes.INVALID_CONFIG, 'publicKey is required', 'Provide your public key from the CrowdHandler dashboard: crowdhandler.init({ publicKey: "YOUR_KEY" })');
@@ -53,7 +53,8 @@ function init(config) {
             fallbackSlug: (_d = config.options) === null || _d === void 0 ? void 0 : _d.fallbackSlug,
             cookieName: (_e = config.options) === null || _e === void 0 ? void 0 : _e.cookieName,
             liteValidator: (_f = config.options) === null || _f === void 0 ? void 0 : _f.liteValidator,
-            roomsConfig: (_g = config.options) === null || _g === void 0 ? void 0 : _g.roomsConfig
+            roomsConfig: (_g = config.options) === null || _g === void 0 ? void 0 : _g.roomsConfig,
+            waitingRoom: (_h = config.options) === null || _h === void 0 ? void 0 : _h.waitingRoom
         };
         // Create gatekeeper using the public client from our unified client
         gatekeeper = new gatekeeper_1.Gatekeeper(client.getPublicClient(), context, {
