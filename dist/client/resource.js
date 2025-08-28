@@ -14,6 +14,28 @@ var __extends = (this && this.__extends) || (function () {
         d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
     };
 })();
+var __assign = (this && this.__assign) || function () {
+    __assign = Object.assign || function(t) {
+        for (var s, i = 1, n = arguments.length; i < n; i++) {
+            s = arguments[i];
+            for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p))
+                t[p] = s[p];
+        }
+        return t;
+    };
+    return __assign.apply(this, arguments);
+};
+var __rest = (this && this.__rest) || function (s, e) {
+    var t = {};
+    for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
+        t[p] = s[p];
+    if (s != null && typeof Object.getOwnPropertySymbols === "function")
+        for (var i = 0, p = Object.getOwnPropertySymbols(s); i < p.length; i++) {
+            if (e.indexOf(p[i]) < 0 && Object.prototype.propertyIsEnumerable.call(s, p[i]))
+                t[p[i]] = s[p[i]];
+        }
+    return t;
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Resource = void 0;
 var base_client_1 = require("./base_client");
@@ -44,11 +66,19 @@ var Resource = /** @class */ (function (_super) {
             id = "";
         }
         this.path = this.formatPath(this.path, id);
-        return _super.prototype.httpGET.call(this, this.path, params);
+        // Extract custom parameters and spread them with other params
+        var _a = params || {}, custom = _a.custom, standardParams = __rest(_a, ["custom"]);
+        var requestParams = __assign(__assign({}, standardParams), custom // Spread custom parameters at the root level
+        );
+        return _super.prototype.httpGET.call(this, this.path, requestParams);
     };
     Resource.prototype.post = function (body) {
         this.path = this.formatPath(this.path, "");
-        return _super.prototype.httpPOST.call(this, this.path, body);
+        // Extract custom parameters and spread them with other body params
+        var _a = body || {}, custom = _a.custom, standardBody = __rest(_a, ["custom"]);
+        var requestBody = __assign(__assign({}, standardBody), custom // Spread custom parameters at the root level
+        );
+        return _super.prototype.httpPOST.call(this, this.path, requestBody);
     };
     Resource.prototype.put = function (id, body) {
         this.path = this.formatPath(this.path, id);

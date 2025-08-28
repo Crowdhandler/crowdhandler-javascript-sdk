@@ -56,6 +56,8 @@ export const SessionRequestConfig = z.object({
   lang: z.string().optional(),
   url: z.string().optional(),
   slug: z.string().optional(),
+  // Allow custom parameters to be passed through
+  custom: z.record(z.any()).optional(),
 });
 
 export const ProcessURLResultObject = z.object({
@@ -141,6 +143,11 @@ export const TokenObjectConstructor = z.object({
   tokenSignatureGenerated: z.string(),
   tokenSignatures: z.array(z.any()),
   tokenValue: z.string(),
+});
+
+// Custom parameters that can be passed to validateRequest
+export const ValidateRequestParams = z.object({
+  custom: z.record(z.any()).optional(),
 });
 
 export const ValidateRequestObject = z.object({

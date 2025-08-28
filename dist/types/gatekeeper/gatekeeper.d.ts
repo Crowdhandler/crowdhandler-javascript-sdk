@@ -64,9 +64,10 @@ export declare class Gatekeeper {
     getConfig(): Promise<void>;
     /**
      * Retrieves the current session status using GET call if a token is available, or POST call otherwise.
+     * @param {object} customParams - Optional custom parameters to include in the API request
      * @returns {Promise<void>} A Promise that resolves when the method has completed.
      */
-    getSessionStatus(): Promise<void>;
+    getSessionStatus(customParams?: Record<string, any>): Promise<void>;
     /**
      * Processes the URL from the request to extract the target URL and any special parameters.
      */
@@ -280,6 +281,8 @@ export declare class Gatekeeper {
      * The primary method for validating requests against CrowdHandler's queue system.
      * Determines whether a user should be granted access to your protected resource or sent to a waiting room.
      *
+     * @param {object} params - Optional parameters to customize the validation
+     * @param {Record<string, any>} params.custom - Custom parameters to pass to the CrowdHandler API
      * @returns {Promise<ValidateRequestObject>} Instructions on how to handle the request:
      * - `promoted` {boolean} - true = grant access, false = send to waiting room
      * - `setCookie` {boolean} - true = update the user's session cookie
@@ -300,9 +303,21 @@ export declare class Gatekeeper {
      *   return gatekeeper.redirectIfNotPromoted();
      * }
      *
+     * @example
+     * // With custom parameters
+     * const result = await gatekeeper.validateRequest({
+     *   custom: {
+     *     userId: 'user123',
+     *     sessionId: 'session456',
+     *     customField: 'value'
+     *   }
+     * });
+     *
      * @throws {CrowdHandlerError} When API connection fails (check error.code === 'API_CONNECTION_FAILED')
      */
-    validateRequest(): Promise<{
+    validateRequest(params?: {
+        custom?: Record<string, any>;
+    }): Promise<{
         promoted: boolean;
         stripParams: boolean;
         setCookie: boolean;
@@ -325,17 +340,20 @@ export declare class Gatekeeper {
      * This method checks for a CrowdHandler cookie and gets the session status for the request.
      * It works the same as full mode but runs in browser environments.
      *
+     * @param {Record<string, any>} customParams - Optional custom parameters to include in the API request
      * @return {Promise<z.infer<typeof validateRequestObject>>} Result of the validation process.
      */
     private validateRequestClientSideMode;
     /**
      * Validates the request by making full use of CrowdHandler API.
      * It handles the request and sets the necessary response based on the session status and API response.
+     * @param {Record<string, any>} customParams - Optional custom parameters to include in the API request
      * @return {Promise<z.infer<typeof ValidateRequestObject>>} - The resulting status after validating the request.
      */
     private validateRequestFullMode;
     /**
      * Validate request using signature and/or Crowdhandler API when required
+     * @param {Record<string, any>} customParams - Optional custom parameters to include in the API request
      */
     private validateRequestHybridMode;
 }

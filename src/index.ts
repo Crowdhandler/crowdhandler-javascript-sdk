@@ -63,6 +63,7 @@ export type { RequestContext } from './request/requestContext';
 // Types for request validation
 export type {
   ValidateRequestObject,
+  ValidateRequestParams,
   RecordPerformanceOptions,
   GatekeeperOptions,
   RoomConfig,
@@ -73,12 +74,14 @@ export type {
 import { z } from 'zod';
 import { 
   ValidateRequestObject as ValidateRequestSchema,
+  ValidateRequestParams as ValidateRequestParamsSchema,
   RecordPerformanceOptions as RecordPerformanceSchema,
   GatekeeperOptions as GatekeeperOptionsSchema,
   RoomConfig as RoomConfigSchema,
 } from './common/types';
 
 export type ValidateRequestResult = z.infer<typeof ValidateRequestSchema>;
+export type ValidateRequestParams = z.infer<typeof ValidateRequestParamsSchema>;
 export type RecordPerformanceOptions = z.infer<typeof RecordPerformanceSchema>;
 export type GatekeeperOptions = z.infer<typeof GatekeeperOptionsSchema>;
 export type LiteValidatorRoom = z.infer<typeof RoomConfigSchema>;

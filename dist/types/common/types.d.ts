@@ -166,18 +166,21 @@ export declare const SessionRequestConfig: z.ZodObject<{
     lang: z.ZodOptional<z.ZodString>;
     url: z.ZodOptional<z.ZodString>;
     slug: z.ZodOptional<z.ZodString>;
+    custom: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodAny>>;
 }, "strip", z.ZodTypeAny, {
     agent?: string | undefined;
     ip?: string | undefined;
     lang?: string | undefined;
     url?: string | undefined;
     slug?: string | undefined;
+    custom?: Record<string, any> | undefined;
 }, {
     agent?: string | undefined;
     ip?: string | undefined;
     lang?: string | undefined;
     url?: string | undefined;
     slug?: string | undefined;
+    custom?: Record<string, any> | undefined;
 }>;
 export declare const ProcessURLResultObject: z.ZodObject<{
     targetURL: z.ZodString;
@@ -417,6 +420,13 @@ export declare const TokenObjectConstructor: z.ZodObject<{
     tokenSignatureGenerated: string;
     tokenSignatures: any[];
     tokenValue: string;
+}>;
+export declare const ValidateRequestParams: z.ZodObject<{
+    custom: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodAny>>;
+}, "strip", z.ZodTypeAny, {
+    custom?: Record<string, any> | undefined;
+}, {
+    custom?: Record<string, any> | undefined;
 }>;
 export declare const ValidateRequestObject: z.ZodObject<{
     promoted: z.ZodBoolean;

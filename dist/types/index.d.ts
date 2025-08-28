@@ -34,10 +34,11 @@ export declare const CROWDHANDLER_ERRORS: {
 export type { InitConfig, InitResult, InitResultWithGatekeeper, InitResultWithoutGatekeeper } from './init';
 export type { Gatekeeper } from './gatekeeper/gatekeeper';
 export type { RequestContext } from './request/requestContext';
-export type { ValidateRequestObject, RecordPerformanceOptions, GatekeeperOptions, RoomConfig, RoomsConfig, } from './common/types';
+export type { ValidateRequestObject, ValidateRequestParams, RecordPerformanceOptions, GatekeeperOptions, RoomConfig, RoomsConfig, } from './common/types';
 import { z } from 'zod';
-import { ValidateRequestObject as ValidateRequestSchema, RecordPerformanceOptions as RecordPerformanceSchema, GatekeeperOptions as GatekeeperOptionsSchema, RoomConfig as RoomConfigSchema } from './common/types';
+import { ValidateRequestObject as ValidateRequestSchema, ValidateRequestParams as ValidateRequestParamsSchema, RecordPerformanceOptions as RecordPerformanceSchema, GatekeeperOptions as GatekeeperOptionsSchema, RoomConfig as RoomConfigSchema } from './common/types';
 export declare type ValidateRequestResult = z.infer<typeof ValidateRequestSchema>;
+export declare type ValidateRequestParams = z.infer<typeof ValidateRequestParamsSchema>;
 export declare type RecordPerformanceOptions = z.infer<typeof RecordPerformanceSchema>;
 export declare type GatekeeperOptions = z.infer<typeof GatekeeperOptionsSchema>;
 export declare type LiteValidatorRoom = z.infer<typeof RoomConfigSchema>;
