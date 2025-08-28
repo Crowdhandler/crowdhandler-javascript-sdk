@@ -8,7 +8,7 @@ export declare class Resource extends BaseClient {
     });
     private formatPath;
     delete(id: string, body: object): Promise<import("zod").objectOutputType<{}, import("zod").ZodAny, "strip"> | undefined>;
-    get(id?: string, params?: object): Promise<import("zod").objectOutputType<{}, import("zod").ZodAny, "strip"> | undefined>;
-    post(body: object): Promise<any>;
+    get(id?: string, params?: any): Promise<import("zod").objectOutputType<{}, import("zod").ZodAny, "strip"> | undefined>;
+    post(body: any): Promise<any>;
     put(id: string, body: object): Promise<import("zod").objectOutputType<{}, import("zod").ZodAny, "strip">>;
 }

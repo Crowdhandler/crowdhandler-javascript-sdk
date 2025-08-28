@@ -830,6 +830,18 @@
 	    return __assign.apply(this, arguments);
 	};
 
+	function __rest(s, e) {
+	    var t = {};
+	    for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
+	        t[p] = s[p];
+	    if (s != null && typeof Object.getOwnPropertySymbols === "function")
+	        for (var i = 0, p = Object.getOwnPropertySymbols(s); i < p.length; i++) {
+	            if (e.indexOf(p[i]) < 0 && Object.prototype.propertyIsEnumerable.call(s, p[i]))
+	                t[p[i]] = s[p[i]];
+	        }
+	    return t;
+	}
+
 	function __awaiter(thisArg, _arguments, P, generator) {
 	    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
 	    return new (P || (P = Promise))(function (resolve, reject) {
@@ -7761,11 +7773,19 @@
 	            id = "";
 	        }
 	        this.path = this.formatPath(this.path, id);
-	        return _super.prototype.httpGET.call(this, this.path, params);
+	        // Extract custom parameters and spread them with other params
+	        var _a = params || {}, custom = _a.custom, standardParams = __rest(_a, ["custom"]);
+	        var requestParams = __assign(__assign({}, standardParams), custom // Spread custom parameters at the root level
+	        );
+	        return _super.prototype.httpGET.call(this, this.path, requestParams);
 	    };
 	    Resource.prototype.post = function (body) {
 	        this.path = this.formatPath(this.path, "");
-	        return _super.prototype.httpPOST.call(this, this.path, body);
+	        // Extract custom parameters and spread them with other body params
+	        var _a = body || {}, custom = _a.custom, standardBody = __rest(_a, ["custom"]);
+	        var requestBody = __assign(__assign({}, standardBody), custom // Spread custom parameters at the root level
+	        );
+	        return _super.prototype.httpPOST.call(this, this.path, requestBody);
 	    };
 	    Resource.prototype.put = function (id, body) {
 	        this.path = this.formatPath(this.path, id);
@@ -8442,6 +8462,8 @@
 	    lang: z.string().optional(),
 	    url: z.string().optional(),
 	    slug: z.string().optional(),
+	    // Allow custom parameters to be passed through
+	    custom: z.record(z.any()).optional(),
 	});
 	z.object({
 	    targetURL: z.string(),
@@ -8512,6 +8534,10 @@
 	    tokenSignatureGenerated: z.string(),
 	    tokenSignatures: z.array(z.any()),
 	    tokenValue: z.string(),
+	});
+	// Custom parameters that can be passed to validateRequest
+	z.object({
+	    custom: z.record(z.any()).optional(),
 	});
 	z.object({
 	    promoted: z.boolean(),
@@ -10318,9 +10344,10 @@
 	    };
 	    /**
 	     * Retrieves the current session status using GET call if a token is available, or POST call otherwise.
+	     * @param {object} customParams - Optional custom parameters to include in the API request
 	     * @returns {Promise<void>} A Promise that resolves when the method has completed.
 	     */
-	    Gatekeeper.prototype.getSessionStatus = function () {
+	    Gatekeeper.prototype.getSessionStatus = function (customParams) {
 	        return __awaiter(this, void 0, void 0, function () {
 	            var requestConfig, url, _a, error_1, _b, error_2;
 	            return __generator(this, function (_c) {
@@ -10343,6 +10370,11 @@
 	                            url = "https://".concat(this.host).concat(this.path);
 	                            requestConfig.url = url;
 	                            logger(this.options.debug, "info", "Using URL in request: ".concat(url));
+	                        }
+	                        // Include custom parameters if provided
+	                        if (customParams && Object.keys(customParams).length > 0) {
+	                            requestConfig.custom = customParams;
+	                            logger(this.options.debug, "info", "Including custom parameters: ".concat(JSON.stringify(customParams)));
 	                        }
 	                        if (!this.token) return [3 /*break*/, 5];
 	                        logger(this.options.debug, "info", "Token found, performing a session GET call.");
@@ -11149,6 +11181,8 @@
 	     * The primary method for validating requests against CrowdHandler's queue system.
 	     * Determines whether a user should be granted access to your protected resource or sent to a waiting room.
 	     *
+	     * @param {object} params - Optional parameters to customize the validation
+	     * @param {Record<string, any>} params.custom - Custom parameters to pass to the CrowdHandler API
 	     * @returns {Promise<ValidateRequestObject>} Instructions on how to handle the request:
 	     * - `promoted` {boolean} - true = grant access, false = send to waiting room
 	     * - `setCookie` {boolean} - true = update the user's session cookie
@@ -11169,9 +11203,19 @@
 	     *   return gatekeeper.redirectIfNotPromoted();
 	     * }
 	     *
+	     * @example
+	     * // With custom parameters
+	     * const result = await gatekeeper.validateRequest({
+	     *   custom: {
+	     *     userId: 'user123',
+	     *     sessionId: 'session456',
+	     *     customField: 'value'
+	     *   }
+	     * });
+	     *
 	     * @throws {CrowdHandlerError} When API connection fails (check error.code === 'API_CONNECTION_FAILED')
 	     */
-	    Gatekeeper.prototype.validateRequest = function () {
+	    Gatekeeper.prototype.validateRequest = function (params) {
 	        return __awaiter(this, void 0, void 0, function () {
 	            var _a;
 	            return __generator(this, function (_b) {
@@ -11184,11 +11228,11 @@
 	                            case "clientside": return [3 /*break*/, 5];
 	                        }
 	                        return [3 /*break*/, 7];
-	                    case 1: return [4 /*yield*/, this.validateRequestHybridMode()];
+	                    case 1: return [4 /*yield*/, this.validateRequestHybridMode(params === null || params === void 0 ? void 0 : params.custom)];
 	                    case 2: return [2 /*return*/, _b.sent()];
-	                    case 3: return [4 /*yield*/, this.validateRequestFullMode()];
+	                    case 3: return [4 /*yield*/, this.validateRequestFullMode(params === null || params === void 0 ? void 0 : params.custom)];
 	                    case 4: return [2 /*return*/, _b.sent()];
-	                    case 5: return [4 /*yield*/, this.validateRequestClientSideMode()];
+	                    case 5: return [4 /*yield*/, this.validateRequestClientSideMode(params === null || params === void 0 ? void 0 : params.custom)];
 	                    case 6: return [2 /*return*/, _b.sent()];
 	                    case 7:
 	                        return [3 /*break*/, 8];
@@ -11203,9 +11247,10 @@
 	     * This method checks for a CrowdHandler cookie and gets the session status for the request.
 	     * It works the same as full mode but runs in browser environments.
 	     *
+	     * @param {Record<string, any>} customParams - Optional custom parameters to include in the API request
 	     * @return {Promise<z.infer<typeof validateRequestObject>>} Result of the validation process.
 	     */
-	    Gatekeeper.prototype.validateRequestClientSideMode = function () {
+	    Gatekeeper.prototype.validateRequestClientSideMode = function (customParams) {
 	        var _a;
 	        return __awaiter(this, void 0, void 0, function () {
 	            var result, liteCheck, sessionStatusType, _b, promoted, slug, token, responseID, deployment, hash, requested, error_3;
@@ -11256,7 +11301,7 @@
 	                            return [2 /*return*/, result];
 	                        }
 	                        logger(this.options.debug, "info", "[Lite Validator] Continuing with normal validation");
-	                        return [4 /*yield*/, this.getSessionStatus()];
+	                        return [4 /*yield*/, this.getSessionStatus(customParams)];
 	                    case 2:
 	                        _c.sent();
 	                        sessionStatusType = HttpErrorWrapper.safeParse(this.sessionStatus);
@@ -11306,9 +11351,10 @@
 	    /**
 	     * Validates the request by making full use of CrowdHandler API.
 	     * It handles the request and sets the necessary response based on the session status and API response.
+	     * @param {Record<string, any>} customParams - Optional custom parameters to include in the API request
 	     * @return {Promise<z.infer<typeof ValidateRequestObject>>} - The resulting status after validating the request.
 	     */
-	    Gatekeeper.prototype.validateRequestFullMode = function () {
+	    Gatekeeper.prototype.validateRequestFullMode = function (customParams) {
 	        var _a;
 	        return __awaiter(this, void 0, void 0, function () {
 	            var result, liteCheck, sessionStatusType, _b, promoted, slug, token, responseID, deployment, hash, requested, error_4;
@@ -11359,7 +11405,7 @@
 	                            return [2 /*return*/, result];
 	                        }
 	                        logger(this.options.debug, "info", "[Lite Validator] Continuing with normal validation");
-	                        return [4 /*yield*/, this.getSessionStatus()];
+	                        return [4 /*yield*/, this.getSessionStatus(customParams)];
 	                    case 2:
 	                        _c.sent();
 	                        sessionStatusType = HttpErrorWrapper.safeParse(this.sessionStatus);
@@ -11409,8 +11455,9 @@
 	    //TODO: This method is a complex beast and needs refactoring
 	    /**
 	     * Validate request using signature and/or Crowdhandler API when required
+	     * @param {Record<string, any>} customParams - Optional custom parameters to include in the API request
 	     */
-	    Gatekeeper.prototype.validateRequestHybridMode = function () {
+	    Gatekeeper.prototype.validateRequestHybridMode = function (customParams) {
 	        var _a, _b;
 	        return __awaiter(this, void 0, void 0, function () {
 	            var signatures, tokens, freshToken, freshSignature, result, liteCheck, configStatusType, sessionStatusType, token, hash, error_5, validationResult, sessionStatusType, hash, token, error_6, _i, _c, item, _d, _e, item;
@@ -11501,7 +11548,7 @@
 	                        _f.label = 2;
 	                    case 2:
 	                        _f.trys.push([2, 4, , 5]);
-	                        return [4 /*yield*/, this.getSessionStatus()];
+	                        return [4 /*yield*/, this.getSessionStatus(customParams)];
 	                    case 3:
 	                        _f.sent();
 	                        sessionStatusType = HttpErrorWrapper.safeParse(this.sessionStatus);
@@ -11564,7 +11611,7 @@
 	                        _f.label = 6;
 	                    case 6:
 	                        _f.trys.push([6, 8, , 9]);
-	                        return [4 /*yield*/, this.getSessionStatus()];
+	                        return [4 /*yield*/, this.getSessionStatus(customParams)];
 	                    case 7:
 	                        _f.sent();
 	                        sessionStatusType = HttpErrorWrapper.safeParse(this.sessionStatus);

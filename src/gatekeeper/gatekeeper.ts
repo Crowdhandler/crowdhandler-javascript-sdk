@@ -218,9 +218,10 @@ export class Gatekeeper {
 
   /**
    * Retrieves the current session status using GET call if a token is available, or POST call otherwise.
+   * @param {object} customParams - Optional custom parameters to include in the API request
    * @returns {Promise<void>} A Promise that resolves when the method has completed.
    */
-  public async getSessionStatus(): Promise<void> {
+  public async getSessionStatus(customParams?: Record<string, any>): Promise<void> {
     // Build request config conditionally
     const requestConfig: z.infer<typeof SessionRequestConfig> = {};
     
@@ -238,6 +239,12 @@ export class Gatekeeper {
       const url = `https://${this.host}${this.path}`;
       requestConfig.url = url;
       logger(this.options.debug, "info", `Using URL in request: ${url}`);
+    }
+
+    // Include custom parameters if provided
+    if (customParams && Object.keys(customParams).length > 0) {
+      requestConfig.custom = customParams;
+      logger(this.options.debug, "info", `Including custom parameters: ${JSON.stringify(customParams)}`);
     }
 
     if (this.token) {
@@ -1233,6 +1240,8 @@ export class Gatekeeper {
    * The primary method for validating requests against CrowdHandler's queue system.
    * Determines whether a user should be granted access to your protected resource or sent to a waiting room.
    * 
+   * @param {object} params - Optional parameters to customize the validation
+   * @param {Record<string, any>} params.custom - Custom parameters to pass to the CrowdHandler API
    * @returns {Promise<ValidateRequestObject>} Instructions on how to handle the request:
    * - `promoted` {boolean} - true = grant access, false = send to waiting room
    * - `setCookie` {boolean} - true = update the user's session cookie
@@ -1253,18 +1262,28 @@ export class Gatekeeper {
    *   return gatekeeper.redirectIfNotPromoted();
    * }
    * 
+   * @example
+   * // With custom parameters
+   * const result = await gatekeeper.validateRequest({
+   *   custom: {
+   *     userId: 'user123',
+   *     sessionId: 'session456',
+   *     customField: 'value'
+   *   }
+   * });
+   * 
    * @throws {CrowdHandlerError} When API connection fails (check error.code === 'API_CONNECTION_FAILED')
    */
-  public async validateRequest() {
+  public async validateRequest(params?: { custom?: Record<string, any> }) {
     switch (this.options.mode) {
       case "hybrid":
-        return await this.validateRequestHybridMode();
+        return await this.validateRequestHybridMode(params?.custom);
         break;
       case "full":
-        return await this.validateRequestFullMode();
+        return await this.validateRequestFullMode(params?.custom);
         break;
       case "clientside":
-        return await this.validateRequestClientSideMode();
+        return await this.validateRequestClientSideMode(params?.custom);
         break;
       default:
         "full";
@@ -1278,9 +1297,10 @@ export class Gatekeeper {
    * This method checks for a CrowdHandler cookie and gets the session status for the request.
    * It works the same as full mode but runs in browser environments.
    *
+   * @param {Record<string, any>} customParams - Optional custom parameters to include in the API request
    * @return {Promise<z.infer<typeof validateRequestObject>>} Result of the validation process.
    */
-  private async validateRequestClientSideMode(): Promise<
+  private async validateRequestClientSideMode(customParams?: Record<string, any>): Promise<
     z.infer<typeof ValidateRequestObject>
   > {
     // Initial result object with default values
@@ -1331,7 +1351,7 @@ export class Gatekeeper {
       }
       logger(this.options.debug, "info", "[Lite Validator] Continuing with normal validation")
       
-      await this.getSessionStatus();
+      await this.getSessionStatus(customParams);
 
       // Use zod safeparse to check that we're working with the SessionStatusErrorWrapper type
       let sessionStatusType = HttpErrorWrapper.safeParse(this.sessionStatus);
@@ -1390,9 +1410,10 @@ export class Gatekeeper {
   /**
    * Validates the request by making full use of CrowdHandler API.
    * It handles the request and sets the necessary response based on the session status and API response.
+   * @param {Record<string, any>} customParams - Optional custom parameters to include in the API request
    * @return {Promise<z.infer<typeof ValidateRequestObject>>} - The resulting status after validating the request.
    */
-  private async validateRequestFullMode(): Promise<
+  private async validateRequestFullMode(customParams?: Record<string, any>): Promise<
     z.infer<typeof ValidateRequestObject>
   > {
     // Default result object
@@ -1443,7 +1464,7 @@ export class Gatekeeper {
       }
       logger(this.options.debug, "info", "[Lite Validator] Continuing with normal validation")
       
-      await this.getSessionStatus();
+      await this.getSessionStatus(customParams);
 
       // Use zod safeparse to check that we're working with the SessionStatusErrorWrapper type
       let sessionStatusType = HttpErrorWrapper.safeParse(this.sessionStatus);
@@ -1502,8 +1523,9 @@ export class Gatekeeper {
   //TODO: This method is a complex beast and needs refactoring
   /**
    * Validate request using signature and/or Crowdhandler API when required
+   * @param {Record<string, any>} customParams - Optional custom parameters to include in the API request
    */
-  private async validateRequestHybridMode() {
+  private async validateRequestHybridMode(customParams?: Record<string, any>) {
     let signatures = [];
     let tokens = [];
     let freshToken;
@@ -1620,7 +1642,7 @@ export class Gatekeeper {
       );
 
       try {
-        await this.getSessionStatus();
+        await this.getSessionStatus(customParams);
 
         //Handle a failed session status check
         //Use zod safeparse to check that we're working with the SessionStatusErrorWrapper type
@@ -1703,7 +1725,7 @@ export class Gatekeeper {
       );
 
       try {
-        await this.getSessionStatus();
+        await this.getSessionStatus(customParams);
 
         //Handle a failed session status check
         //Use zod safeparse to check that we're working with the SessionStatusErrorWrapper type

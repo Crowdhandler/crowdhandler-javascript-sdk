@@ -130,18 +130,32 @@ await gatekeeper.recordPerformance();
 
 ## Core Methods
 
-### gatekeeper.validateRequest()
+### gatekeeper.validateRequest(params?)
 
 The primary method for validating requests against CrowdHandler's queue system. This method determines whether a user should be granted access to your protected resource or sent to a waiting room.
 
 ```javascript
+// Basic usage
 const result = await gatekeeper.validateRequest();
+
+// With custom parameters
+const result = await gatekeeper.validateRequest({
+  custom: {
+    code: 'ABC123',
+    captcha: 'xK9mN2pQ5vL8wR3tY6uZ1aS4dF7gH0j'
+  }
+});
 ```
+
+**Parameters:**
+
+- `params` (optional) - Object containing custom parameters
+  - `custom` - Object with any key-value pairs to send to the CrowdHandler API
 
 **How it works:**
 
 1. **Token Check**: First checks for an existing CrowdHandler session token in cookies
-2. **API Validation**: Sends the token (or generates a new one) to CrowdHandler's API
+2. **API Validation**: Sends the token (or generates a new one) to CrowdHandler's API, including any custom parameters
 3. **Queue Position**: Determines if the user is promoted based on current capacity
 4. **Response**: Returns instructions on how to handle the request
 

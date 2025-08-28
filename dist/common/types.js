@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.Modes = exports.RecordPerformanceOptions = exports.SessionStatusWrapper = exports.HttpErrorWrapper = exports.ValidateRequestObject = exports.TokenObjectConstructor = exports.TokenObject = exports.ExtractTokenOptions = exports.SignatureSourceObject = exports.SignatureResponseObject = exports.SignatureObject = exports.RoomMetaObject = exports.LocalStorageOptions = exports.LocalStorageObject = exports.CookieObject = exports.RequestObject = exports.ProcessURLResultObject = exports.SessionRequestConfig = exports.SpecialParametersObject = exports.QueryObject = exports.GatekeeperKeyPair = exports.GatekeeperOptions = exports.RoomsConfig = exports.RoomConfig = void 0;
+exports.Modes = exports.RecordPerformanceOptions = exports.SessionStatusWrapper = exports.HttpErrorWrapper = exports.ValidateRequestObject = exports.ValidateRequestParams = exports.TokenObjectConstructor = exports.TokenObject = exports.ExtractTokenOptions = exports.SignatureSourceObject = exports.SignatureResponseObject = exports.SignatureObject = exports.RoomMetaObject = exports.LocalStorageOptions = exports.LocalStorageObject = exports.CookieObject = exports.RequestObject = exports.ProcessURLResultObject = exports.SessionRequestConfig = exports.SpecialParametersObject = exports.QueryObject = exports.GatekeeperKeyPair = exports.GatekeeperOptions = exports.RoomsConfig = exports.RoomConfig = void 0;
 var zod_1 = require("zod");
 // Lite Validator types
 exports.RoomConfig = zod_1.z.object({
@@ -52,6 +52,8 @@ exports.SessionRequestConfig = zod_1.z.object({
     lang: zod_1.z.string().optional(),
     url: zod_1.z.string().optional(),
     slug: zod_1.z.string().optional(),
+    // Allow custom parameters to be passed through
+    custom: zod_1.z.record(zod_1.z.any()).optional(),
 });
 exports.ProcessURLResultObject = zod_1.z.object({
     targetURL: zod_1.z.string(),
@@ -122,6 +124,10 @@ exports.TokenObjectConstructor = zod_1.z.object({
     tokenSignatureGenerated: zod_1.z.string(),
     tokenSignatures: zod_1.z.array(zod_1.z.any()),
     tokenValue: zod_1.z.string(),
+});
+// Custom parameters that can be passed to validateRequest
+exports.ValidateRequestParams = zod_1.z.object({
+    custom: zod_1.z.record(zod_1.z.any()).optional(),
 });
 exports.ValidateRequestObject = zod_1.z.object({
     promoted: zod_1.z.boolean(),

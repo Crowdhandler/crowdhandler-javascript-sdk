@@ -177,9 +177,10 @@ var Gatekeeper = /** @class */ (function () {
     };
     /**
      * Retrieves the current session status using GET call if a token is available, or POST call otherwise.
+     * @param {object} customParams - Optional custom parameters to include in the API request
      * @returns {Promise<void>} A Promise that resolves when the method has completed.
      */
-    Gatekeeper.prototype.getSessionStatus = function () {
+    Gatekeeper.prototype.getSessionStatus = function (customParams) {
         return __awaiter(this, void 0, void 0, function () {
             var requestConfig, url, _a, error_1, _b, error_2;
             return __generator(this, function (_c) {
@@ -202,6 +203,11 @@ var Gatekeeper = /** @class */ (function () {
                             url = "https://".concat(this.host).concat(this.path);
                             requestConfig.url = url;
                             (0, logger_1.logger)(this.options.debug, "info", "Using URL in request: ".concat(url));
+                        }
+                        // Include custom parameters if provided
+                        if (customParams && Object.keys(customParams).length > 0) {
+                            requestConfig.custom = customParams;
+                            (0, logger_1.logger)(this.options.debug, "info", "Including custom parameters: ".concat(JSON.stringify(customParams)));
                         }
                         if (!this.token) return [3 /*break*/, 5];
                         (0, logger_1.logger)(this.options.debug, "info", "Token found, performing a session GET call.");
@@ -1008,6 +1014,8 @@ var Gatekeeper = /** @class */ (function () {
      * The primary method for validating requests against CrowdHandler's queue system.
      * Determines whether a user should be granted access to your protected resource or sent to a waiting room.
      *
+     * @param {object} params - Optional parameters to customize the validation
+     * @param {Record<string, any>} params.custom - Custom parameters to pass to the CrowdHandler API
      * @returns {Promise<ValidateRequestObject>} Instructions on how to handle the request:
      * - `promoted` {boolean} - true = grant access, false = send to waiting room
      * - `setCookie` {boolean} - true = update the user's session cookie
@@ -1028,9 +1036,19 @@ var Gatekeeper = /** @class */ (function () {
      *   return gatekeeper.redirectIfNotPromoted();
      * }
      *
+     * @example
+     * // With custom parameters
+     * const result = await gatekeeper.validateRequest({
+     *   custom: {
+     *     userId: 'user123',
+     *     sessionId: 'session456',
+     *     customField: 'value'
+     *   }
+     * });
+     *
      * @throws {CrowdHandlerError} When API connection fails (check error.code === 'API_CONNECTION_FAILED')
      */
-    Gatekeeper.prototype.validateRequest = function () {
+    Gatekeeper.prototype.validateRequest = function (params) {
         return __awaiter(this, void 0, void 0, function () {
             var _a;
             return __generator(this, function (_b) {
@@ -1043,11 +1061,11 @@ var Gatekeeper = /** @class */ (function () {
                             case "clientside": return [3 /*break*/, 5];
                         }
                         return [3 /*break*/, 7];
-                    case 1: return [4 /*yield*/, this.validateRequestHybridMode()];
+                    case 1: return [4 /*yield*/, this.validateRequestHybridMode(params === null || params === void 0 ? void 0 : params.custom)];
                     case 2: return [2 /*return*/, _b.sent()];
-                    case 3: return [4 /*yield*/, this.validateRequestFullMode()];
+                    case 3: return [4 /*yield*/, this.validateRequestFullMode(params === null || params === void 0 ? void 0 : params.custom)];
                     case 4: return [2 /*return*/, _b.sent()];
-                    case 5: return [4 /*yield*/, this.validateRequestClientSideMode()];
+                    case 5: return [4 /*yield*/, this.validateRequestClientSideMode(params === null || params === void 0 ? void 0 : params.custom)];
                     case 6: return [2 /*return*/, _b.sent()];
                     case 7:
                         "full";
@@ -1063,9 +1081,10 @@ var Gatekeeper = /** @class */ (function () {
      * This method checks for a CrowdHandler cookie and gets the session status for the request.
      * It works the same as full mode but runs in browser environments.
      *
+     * @param {Record<string, any>} customParams - Optional custom parameters to include in the API request
      * @return {Promise<z.infer<typeof validateRequestObject>>} Result of the validation process.
      */
-    Gatekeeper.prototype.validateRequestClientSideMode = function () {
+    Gatekeeper.prototype.validateRequestClientSideMode = function (customParams) {
         var _a;
         return __awaiter(this, void 0, void 0, function () {
             var result, liteCheck, sessionStatusType, _b, promoted, slug, token, responseID, deployment, hash, requested, error_3;
@@ -1116,7 +1135,7 @@ var Gatekeeper = /** @class */ (function () {
                             return [2 /*return*/, result];
                         }
                         (0, logger_1.logger)(this.options.debug, "info", "[Lite Validator] Continuing with normal validation");
-                        return [4 /*yield*/, this.getSessionStatus()];
+                        return [4 /*yield*/, this.getSessionStatus(customParams)];
                     case 2:
                         _c.sent();
                         sessionStatusType = types_1.HttpErrorWrapper.safeParse(this.sessionStatus);
@@ -1166,9 +1185,10 @@ var Gatekeeper = /** @class */ (function () {
     /**
      * Validates the request by making full use of CrowdHandler API.
      * It handles the request and sets the necessary response based on the session status and API response.
+     * @param {Record<string, any>} customParams - Optional custom parameters to include in the API request
      * @return {Promise<z.infer<typeof ValidateRequestObject>>} - The resulting status after validating the request.
      */
-    Gatekeeper.prototype.validateRequestFullMode = function () {
+    Gatekeeper.prototype.validateRequestFullMode = function (customParams) {
         var _a;
         return __awaiter(this, void 0, void 0, function () {
             var result, liteCheck, sessionStatusType, _b, promoted, slug, token, responseID, deployment, hash, requested, error_4;
@@ -1219,7 +1239,7 @@ var Gatekeeper = /** @class */ (function () {
                             return [2 /*return*/, result];
                         }
                         (0, logger_1.logger)(this.options.debug, "info", "[Lite Validator] Continuing with normal validation");
-                        return [4 /*yield*/, this.getSessionStatus()];
+                        return [4 /*yield*/, this.getSessionStatus(customParams)];
                     case 2:
                         _c.sent();
                         sessionStatusType = types_1.HttpErrorWrapper.safeParse(this.sessionStatus);
@@ -1269,8 +1289,9 @@ var Gatekeeper = /** @class */ (function () {
     //TODO: This method is a complex beast and needs refactoring
     /**
      * Validate request using signature and/or Crowdhandler API when required
+     * @param {Record<string, any>} customParams - Optional custom parameters to include in the API request
      */
-    Gatekeeper.prototype.validateRequestHybridMode = function () {
+    Gatekeeper.prototype.validateRequestHybridMode = function (customParams) {
         var _a, _b;
         return __awaiter(this, void 0, void 0, function () {
             var signatures, tokens, freshToken, freshSignature, processedCookie, result, liteCheck, configStatusType, sessionStatusType, token, hash, requested, error_5, validationResult, sessionStatusType, hash, requested, token, error_6, _i, _c, item, _d, _e, item;
@@ -1361,7 +1382,7 @@ var Gatekeeper = /** @class */ (function () {
                         _f.label = 2;
                     case 2:
                         _f.trys.push([2, 4, , 5]);
-                        return [4 /*yield*/, this.getSessionStatus()];
+                        return [4 /*yield*/, this.getSessionStatus(customParams)];
                     case 3:
                         _f.sent();
                         sessionStatusType = types_1.HttpErrorWrapper.safeParse(this.sessionStatus);
@@ -1425,7 +1446,7 @@ var Gatekeeper = /** @class */ (function () {
                         _f.label = 6;
                     case 6:
                         _f.trys.push([6, 8, , 9]);
-                        return [4 /*yield*/, this.getSessionStatus()];
+                        return [4 /*yield*/, this.getSessionStatus(customParams)];
                     case 7:
                         _f.sent();
                         sessionStatusType = types_1.HttpErrorWrapper.safeParse(this.sessionStatus);
