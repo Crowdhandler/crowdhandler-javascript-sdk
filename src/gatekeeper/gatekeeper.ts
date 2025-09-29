@@ -901,21 +901,66 @@ export class Gatekeeper {
   }
 
   /**
+   * Detects if a domain pattern contains a wildcard and extracts the root domain for cookie setting
+   * @param domainPattern - The domain pattern from room config (e.g., "https://*.example.com")
+   * @returns Object with isWildcard flag and optional rootDomain for cookie
+   */
+  private detectWildcardAndRoot(domainPattern: string): { isWildcard: boolean; rootDomain?: string } {
+    // Check if there's a wildcard after https://
+    const match = domainPattern.match(/^https:\/\/[^a-z0-9]*\*[^a-z0-9]*([a-z0-9].*)$/i);
+
+    if (!match) {
+      return { isWildcard: false };
+    }
+
+    // match[1] is everything from first alphanumeric onward
+    const domainPart = match[1]; // e.g., "example.com" or "example.*"
+
+    // Check if there's a wildcard at the end - can't use wildcard cookies for these
+    if (domainPart.includes('*')) {
+      logger(this.options.debug, "info", "Domain has trailing wildcard, cannot use root domain cookie");
+      return { isWildcard: false };
+    }
+
+    // Extract root domain (last two parts for cookie domain)
+    const parts = domainPart.split('.');
+    const rootDomain = parts.length >= 2
+      ? `.${parts.slice(-2).join('.')}`
+      : `.${domainPart}`;
+
+    return {
+      isWildcard: true,
+      rootDomain: rootDomain
+    };
+  }
+
+  /**
    * Sets the CrowdHandler session cookie. Always call this when result.setCookie is true
    * to maintain the user's queue position.
    * 
    * @param {string} value - The cookie value to set (from result.cookieValue)
+   * @param {string} domain - Optional domain pattern to determine cookie domain scope
    * @returns {boolean} True if the cookie was successfully set, false otherwise
    * 
    * @example
    * if (result.setCookie) {
-   *   gatekeeper.setCookie(result.cookieValue);
+   *   gatekeeper.setCookie(result.cookieValue, result.domain);
    * }
    */
-  public setCookie(value: string): boolean {
+  public setCookie(value: string, domain?: string): boolean {
     try {
+      // Determine cookie domain if domain pattern is provided
+      let cookieDomain: string | undefined;
+      if (domain) {
+        const { isWildcard, rootDomain } = this.detectWildcardAndRoot(domain);
+        if (isWildcard && rootDomain) {
+          cookieDomain = rootDomain;
+          logger(this.options.debug, "info", `Setting cookie with domain: ${cookieDomain}`);
+        }
+      }
+      
       // Set the cookie with the provided value and options
-      this.REQUEST.setCookie(value, this.STORAGE_NAME);
+      this.REQUEST.setCookie(value, this.STORAGE_NAME, cookieDomain);
       return true;
     } catch (error: any) {
       logger(this.options.debug, "error", error);
@@ -1183,7 +1228,7 @@ export class Gatekeeper {
   /**
    * Determines if the request should be redirected to the lite validator
    */
-  private shouldRedirectToLiteValidator(): { redirect: boolean; url?: string } {
+  private shouldRedirectToLiteValidator(): { redirect: boolean; url?: string; domain?: string } {
     logger(this.options.debug, "info", "[Lite Validator] === Starting lite validator check ===");
     logger(this.options.debug, "info", `[Lite Validator] Lite validator enabled: ${this.options.liteValidator}`);
     logger(this.options.debug, "info", `[Lite Validator] Rooms config provided: ${!!this.options.roomsConfig}`);
@@ -1212,11 +1257,11 @@ export class Gatekeeper {
     if (tokenMissing || tokenIsOld) {
       const redirectUrl = this.buildLiteValidatorUrl();
       logger(this.options.debug, "info", `[Lite Validator] REDIRECT REQUIRED to: ${redirectUrl}`);
-      return { redirect: true, url: redirectUrl };
+      return { redirect: true, url: redirectUrl, domain: (roomMatch as any).domain };
     }
 
     logger(this.options.debug, "info", "[Lite Validator] Token is valid - no redirect needed");
-    return { redirect: false };
+    return { redirect: false, domain: (roomMatch as any).domain };
   }
 
   /**
@@ -1342,6 +1387,12 @@ export class Gatekeeper {
       // Lite validator check - EARLY EXIT
       logger(this.options.debug, "info", "[Lite Validator] Performing lite validator check in validateRequestClientSideMode");
       const liteCheck = this.shouldRedirectToLiteValidator();
+      
+      // Store domain from lite validator if available
+      if (liteCheck.domain) {
+        result.domain = liteCheck.domain;
+      }
+      
       if (liteCheck.redirect) {
         logger(this.options.debug, "info", "[Lite Validator] Lite validator redirect triggered in clientside mode");
         result.liteValidatorRedirect = true;
@@ -1370,9 +1421,14 @@ export class Gatekeeper {
 
       // Processing based on promotion status
       if (this.sessionStatus) {
-        const { promoted, slug, token, responseID, deployment, hash, requested } = this.sessionStatus.result;
+        const { promoted, slug, token, responseID, deployment, hash, requested, domain } = this.sessionStatus.result;
 
         result.promoted = promoted === 1;
+        
+        // Pass domain from API response if available
+        if (domain) {
+          result.domain = domain;
+        }
         result.slug = slug || result.slug;
         this.token = token || this.token;
         result.token = token || result.token;
@@ -1455,6 +1511,12 @@ export class Gatekeeper {
       // Lite validator check - EARLY EXIT
       logger(this.options.debug, "info", "[Lite Validator] Performing lite validator check in validateRequestClientSideMode");
       const liteCheck = this.shouldRedirectToLiteValidator();
+      
+      // Store domain from lite validator if available
+      if (liteCheck.domain) {
+        result.domain = liteCheck.domain;
+      }
+      
       if (liteCheck.redirect) {
         logger(this.options.debug, "info", "[Lite Validator] Lite validator redirect triggered in clientside mode");
         result.liteValidatorRedirect = true;
@@ -1483,9 +1545,14 @@ export class Gatekeeper {
 
       // Processing based on promotion status
       if (this.sessionStatus) {
-        const { promoted, slug, token, responseID, deployment, hash, requested } = this.sessionStatus.result;
+        const { promoted, slug, token, responseID, deployment, hash, requested, domain } = this.sessionStatus.result;
 
         result.promoted = promoted === 1;
+        
+        // Pass domain from API response if available
+        if (domain) {
+          result.domain = domain;
+        }
         result.slug = slug || result.slug;
         this.token = token || this.token;
         result.token = token || result.token;
@@ -1568,6 +1635,12 @@ export class Gatekeeper {
     
     // Lite validator check - EARLY EXIT
     const liteCheck = this.shouldRedirectToLiteValidator();
+    
+    // Store domain from lite validator if available
+    if (liteCheck.domain) {
+      result.domain = liteCheck.domain;
+    }
+    
     if (liteCheck.redirect) {
       result.liteValidatorRedirect = true;
       result.liteValidatorUrl = liteCheck.url;
@@ -1663,6 +1736,12 @@ export class Gatekeeper {
         }
 
         let token: string;
+        
+        // Pass domain from API response if available
+        if (this.sessionStatus && this.sessionStatus.result.domain) {
+          result.domain = this.sessionStatus.result.domain;
+        }
+        
         if (this.sessionStatus && this.sessionStatus.result.promoted === 0) {
           if (this.sessionStatus.result.token) {
             token = this.sessionStatus.result.token;
@@ -1745,6 +1824,11 @@ export class Gatekeeper {
           }
         }
 
+        // Pass domain from API response if available
+        if (this.sessionStatus && this.sessionStatus.result.domain) {
+          result.domain = this.sessionStatus.result.domain;
+        }
+        
         if (this.sessionStatus && this.sessionStatus.result.promoted === 0) {
           result.promoted = false;
           return result;

@@ -35,12 +35,16 @@ var NodeJSHandler = /** @class */ (function () {
     NodeJSHandler.prototype.getUserHostAddress = function () {
         return this.request.ip;
     };
-    NodeJSHandler.prototype.setCookie = function (value, cookieName) {
+    NodeJSHandler.prototype.setCookie = function (value, cookieName, domain) {
         if (cookieName === void 0) { cookieName = "crowdhandler"; }
         var cookieOptions = {
             path: "/",
             secure: true, // cookie will only be sent over HTTPS
         };
+        // Add domain if provided
+        if (domain) {
+            cookieOptions.domain = domain;
+        }
         //Append cookie to response header
         return this.response.setHeader("Set-Cookie", "".concat(cookieName, "=").concat(value, "; ").concat(Object.keys(cookieOptions)
             .map(function (key) { return "".concat(key, "=").concat(cookieOptions[key]); })

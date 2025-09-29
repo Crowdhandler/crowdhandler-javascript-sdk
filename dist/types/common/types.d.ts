@@ -444,6 +444,7 @@ export declare const ValidateRequestObject: z.ZodObject<{
     requested: z.ZodOptional<z.ZodString>;
     liteValidatorRedirect: z.ZodOptional<z.ZodBoolean>;
     liteValidatorUrl: z.ZodOptional<z.ZodString>;
+    domain: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
     promoted: boolean;
     stripParams: boolean;
@@ -460,6 +461,7 @@ export declare const ValidateRequestObject: z.ZodObject<{
     requested?: string | undefined;
     liteValidatorRedirect?: boolean | undefined;
     liteValidatorUrl?: string | undefined;
+    domain?: string | undefined;
 }, {
     promoted: boolean;
     stripParams: boolean;
@@ -476,6 +478,7 @@ export declare const ValidateRequestObject: z.ZodObject<{
     requested?: string | undefined;
     liteValidatorRedirect?: boolean | undefined;
     liteValidatorUrl?: string | undefined;
+    domain?: string | undefined;
 }>;
 export declare const HttpErrorWrapper: z.ZodObject<{
     result: z.ZodObject<{

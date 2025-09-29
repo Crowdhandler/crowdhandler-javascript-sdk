@@ -145,6 +145,7 @@ exports.ValidateRequestObject = zod_1.z.object({
     requested: zod_1.z.string().optional(),
     liteValidatorRedirect: zod_1.z.boolean().optional(),
     liteValidatorUrl: zod_1.z.string().optional(),
+    domain: zod_1.z.string().optional(),
 });
 exports.HttpErrorWrapper = zod_1.z.object({
     result: zod_1.z.object({

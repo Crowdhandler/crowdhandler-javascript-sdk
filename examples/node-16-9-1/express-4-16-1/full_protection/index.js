@@ -14,7 +14,7 @@ const crowdHandlerMiddleware = async (req, res, next) => {
     const chStatus = await gatekeeper.validateRequest();
 
     if (chStatus.setCookie) {
-      gatekeeper.setCookie(chStatus.cookieValue);
+      gatekeeper.setCookie(chStatus.cookieValue, chStatus.domain);
     }
 
     if (chStatus.stripParams) {
