@@ -25,11 +25,17 @@ export class BrowserHandler {
     return window.location.href;
   }
 
-  public setCookie(value: string, cookieName: string = "crowdhandler") {
+  public setCookie(value: string, cookieName: string = "crowdhandler", domain?: string) {
     const cookieOptions: any = {
       path: "/",
       secure: true, // cookie will only be sent over HTTPS
     };
+    
+    // Add domain if provided
+    if (domain) {
+      cookieOptions.domain = domain;
+    }
+    
     document.cookie = `${cookieName}=${value}; ${Object.keys(cookieOptions)
       .map((key) => `${key}=${cookieOptions[key]}`)
       .join("; ")}`;

@@ -11,6 +11,6 @@ export declare class NodeJSHandler {
     getPath(): any;
     getAbsoluteUri(): string;
     getUserHostAddress(): any;
-    setCookie(value: z.infer<typeof CookieObject>, cookieName?: string): any;
+    setCookie(value: z.infer<typeof CookieObject>, cookieName?: string, domain?: string): any;
     redirect(url: string): any;
 }

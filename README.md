@@ -63,7 +63,7 @@ const result = await gatekeeper.validateRequest();
 
 // Handle the validation result
 if (result.setCookie) {
-  gatekeeper.setCookie(result.cookieValue);
+  gatekeeper.setCookie(result.cookieValue, result.domain);
 }
 
 if (result.stripParams) {
@@ -106,7 +106,7 @@ const result = await gatekeeper.validateRequest();
 
 // Handle the validation result
 if (result.setCookie) {
-  gatekeeper.setCookie(result.cookieValue);
+  gatekeeper.setCookie(result.cookieValue, result.domain);
 }
 
 if (result.stripParams) {
@@ -199,13 +199,13 @@ try {
 }
 ```
 
-### gatekeeper.setCookie(value)
+### gatekeeper.setCookie(value, domain?)
 
-Sets the CrowdHandler session cookie. Always call this when `result.setCookie` is true to maintain the user's queue position.
+Sets the CrowdHandler session cookie. Always call this when `result.setCookie` is true to maintain the user's queue position. The optional `domain` parameter (provided in `result.domain`) enables proper cookie scoping for wildcard domains.
 
 ```javascript
 if (result.setCookie) {
-  gatekeeper.setCookie(result.cookieValue);
+  gatekeeper.setCookie(result.cookieValue, result.domain);
 }
 ```
 
@@ -469,7 +469,7 @@ async function protectRoute(req, res, next) {
     const result = await gatekeeper.validateRequest();
     
     if (result.setCookie) {
-      gatekeeper.setCookie(result.cookieValue);
+      gatekeeper.setCookie(result.cookieValue, result.domain);
     }
     
     if (result.stripParams) {

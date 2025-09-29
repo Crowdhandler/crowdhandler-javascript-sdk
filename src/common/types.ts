@@ -166,6 +166,7 @@ export const ValidateRequestObject = z.object({
   requested: z.string().optional(),
   liteValidatorRedirect: z.boolean().optional(),
   liteValidatorUrl: z.string().optional(),
+  domain: z.string().optional(),
 });
 
 export const HttpErrorWrapper = z.object({

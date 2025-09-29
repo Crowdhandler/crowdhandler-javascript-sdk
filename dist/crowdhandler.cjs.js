@@ -1,5 +1,5 @@
 /**
- * CrowdHandler JavaScript SDK v2.1.3
+ * CrowdHandler JavaScript SDK v2.2.0
  * (c) 2025 CrowdHandler
  * @license ISC
  */
@@ -1666,12 +1666,16 @@ var BrowserHandler = /** @class */ (function () {
     BrowserHandler.prototype.getAbsoluteUri = function () {
         return window.location.href;
     };
-    BrowserHandler.prototype.setCookie = function (value, cookieName) {
+    BrowserHandler.prototype.setCookie = function (value, cookieName, domain) {
         if (cookieName === void 0) { cookieName = "crowdhandler"; }
         var cookieOptions = {
             path: "/",
             secure: true, // cookie will only be sent over HTTPS
         };
+        // Add domain if provided
+        if (domain) {
+            cookieOptions.domain = domain;
+        }
         document.cookie = "".concat(cookieName, "=").concat(value, "; ").concat(Object.keys(cookieOptions)
             .map(function (key) { return "".concat(key, "=").concat(cookieOptions[key]); })
             .join("; "));
@@ -1804,12 +1808,16 @@ var LambdaResponseHandler = /** @class */ (function () {
     LambdaResponseHandler.prototype.getPath = function () {
         return this.request.uri;
     };
-    LambdaResponseHandler.prototype.setCookie = function (value, cookieName) {
+    LambdaResponseHandler.prototype.setCookie = function (value, cookieName, domain) {
         if (cookieName === void 0) { cookieName = "crowdhandler"; }
         var cookieOptions = {
             path: "/",
             secure: true, // cookie will only be sent over HTTPS
         };
+        // Add domain if provided
+        if (domain) {
+            cookieOptions.domain = domain;
+        }
         // Append cookie to response header
         var cookieHeader = "".concat(cookieName, "=").concat(value, "; ").concat(Object.keys(cookieOptions)
             .map(function (key) { return "".concat(key, "=").concat(cookieOptions[key]); })
@@ -1856,12 +1864,16 @@ var NodeJSHandler = /** @class */ (function () {
     NodeJSHandler.prototype.getUserHostAddress = function () {
         return this.request.ip;
     };
-    NodeJSHandler.prototype.setCookie = function (value, cookieName) {
+    NodeJSHandler.prototype.setCookie = function (value, cookieName, domain) {
         if (cookieName === void 0) { cookieName = "crowdhandler"; }
         var cookieOptions = {
             path: "/",
             secure: true, // cookie will only be sent over HTTPS
         };
+        // Add domain if provided
+        if (domain) {
+            cookieOptions.domain = domain;
+        }
         //Append cookie to response header
         return this.response.setHeader("Set-Cookie", "".concat(cookieName, "=").concat(value, "; ").concat(Object.keys(cookieOptions)
             .map(function (key) { return "".concat(key, "=").concat(cookieOptions[key]); })
@@ -2060,6 +2072,7 @@ zod.z.object({
     requested: zod.z.string().optional(),
     liteValidatorRedirect: zod.z.boolean().optional(),
     liteValidatorUrl: zod.z.string().optional(),
+    domain: zod.z.string().optional(),
 });
 var HttpErrorWrapper = zod.z.object({
     result: zod.z.object({
@@ -3207,21 +3220,59 @@ var Gatekeeper = /** @class */ (function () {
         };
     };
     /**
+     * Detects if a domain pattern contains a wildcard and extracts the root domain for cookie setting
+     * @param domainPattern - The domain pattern from room config (e.g., "https://*.example.com")
+     * @returns Object with isWildcard flag and optional rootDomain for cookie
+     */
+    Gatekeeper.prototype.detectWildcardAndRoot = function (domainPattern) {
+        // Check if there's a wildcard after https://
+        var match = domainPattern.match(/^https:\/\/[^a-z0-9]*\*[^a-z0-9]*([a-z0-9].*)$/i);
+        if (!match) {
+            return { isWildcard: false };
+        }
+        // match[1] is everything from first alphanumeric onward
+        var domainPart = match[1]; // e.g., "example.com" or "example.*"
+        // Check if there's a wildcard at the end - can't use wildcard cookies for these
+        if (domainPart.includes('*')) {
+            logger(this.options.debug, "info", "Domain has trailing wildcard, cannot use root domain cookie");
+            return { isWildcard: false };
+        }
+        // Extract root domain (last two parts for cookie domain)
+        var parts = domainPart.split('.');
+        var rootDomain = parts.length >= 2
+            ? ".".concat(parts.slice(-2).join('.'))
+            : ".".concat(domainPart);
+        return {
+            isWildcard: true,
+            rootDomain: rootDomain
+        };
+    };
+    /**
      * Sets the CrowdHandler session cookie. Always call this when result.setCookie is true
      * to maintain the user's queue position.
      *
      * @param {string} value - The cookie value to set (from result.cookieValue)
+     * @param {string} domain - Optional domain pattern to determine cookie domain scope
      * @returns {boolean} True if the cookie was successfully set, false otherwise
      *
      * @example
      * if (result.setCookie) {
-     *   gatekeeper.setCookie(result.cookieValue);
+     *   gatekeeper.setCookie(result.cookieValue, result.domain);
      * }
      */
-    Gatekeeper.prototype.setCookie = function (value) {
+    Gatekeeper.prototype.setCookie = function (value, domain) {
         try {
+            // Determine cookie domain if domain pattern is provided
+            var cookieDomain = void 0;
+            if (domain) {
+                var _a = this.detectWildcardAndRoot(domain), isWildcard = _a.isWildcard, rootDomain = _a.rootDomain;
+                if (isWildcard && rootDomain) {
+                    cookieDomain = rootDomain;
+                    logger(this.options.debug, "info", "Setting cookie with domain: ".concat(cookieDomain));
+                }
+            }
             // Set the cookie with the provided value and options
-            this.REQUEST.setCookie(value, this.STORAGE_NAME);
+            this.REQUEST.setCookie(value, this.STORAGE_NAME, cookieDomain);
             return true;
         }
         catch (error) {
@@ -3473,10 +3524,10 @@ var Gatekeeper = /** @class */ (function () {
         if (tokenMissing || tokenIsOld) {
             var redirectUrl = this.buildLiteValidatorUrl();
             logger(this.options.debug, "info", "[Lite Validator] REDIRECT REQUIRED to: ".concat(redirectUrl));
-            return { redirect: true, url: redirectUrl };
+            return { redirect: true, url: redirectUrl, domain: roomMatch.domain };
         }
         logger(this.options.debug, "info", "[Lite Validator] Token is valid - no redirect needed");
-        return { redirect: false };
+        return { redirect: false, domain: roomMatch.domain };
     };
     /**
      * Builds the lite validator redirect URL
@@ -3568,7 +3619,7 @@ var Gatekeeper = /** @class */ (function () {
     Gatekeeper.prototype.validateRequestClientSideMode = function (customParams) {
         var _a;
         return __awaiter(this, void 0, void 0, function () {
-            var result, liteCheck, sessionStatusType, _b, promoted, slug, token, responseID, deployment, hash, requested, error_3;
+            var result, liteCheck, sessionStatusType, _b, promoted, slug, token, responseID, deployment, hash, requested, domain, error_3;
             return __generator(this, function (_c) {
                 switch (_c.label) {
                     case 0:
@@ -3608,6 +3659,10 @@ var Gatekeeper = /** @class */ (function () {
                         // Lite validator check - EARLY EXIT
                         logger(this.options.debug, "info", "[Lite Validator] Performing lite validator check in validateRequestClientSideMode");
                         liteCheck = this.shouldRedirectToLiteValidator();
+                        // Store domain from lite validator if available
+                        if (liteCheck.domain) {
+                            result.domain = liteCheck.domain;
+                        }
                         if (liteCheck.redirect) {
                             logger(this.options.debug, "info", "[Lite Validator] Lite validator redirect triggered in clientside mode");
                             result.liteValidatorRedirect = true;
@@ -3632,8 +3687,12 @@ var Gatekeeper = /** @class */ (function () {
                         }
                         // Processing based on promotion status
                         if (this.sessionStatus) {
-                            _b = this.sessionStatus.result, promoted = _b.promoted, slug = _b.slug, token = _b.token, responseID = _b.responseID, deployment = _b.deployment, hash = _b.hash, requested = _b.requested;
+                            _b = this.sessionStatus.result, promoted = _b.promoted, slug = _b.slug, token = _b.token, responseID = _b.responseID, deployment = _b.deployment, hash = _b.hash, requested = _b.requested, domain = _b.domain;
                             result.promoted = promoted === 1;
+                            // Pass domain from API response if available
+                            if (domain) {
+                                result.domain = domain;
+                            }
                             result.slug = slug || result.slug;
                             this.token = token || this.token;
                             result.token = token || result.token;
@@ -3672,7 +3731,7 @@ var Gatekeeper = /** @class */ (function () {
     Gatekeeper.prototype.validateRequestFullMode = function (customParams) {
         var _a;
         return __awaiter(this, void 0, void 0, function () {
-            var result, liteCheck, sessionStatusType, _b, promoted, slug, token, responseID, deployment, hash, requested, error_4;
+            var result, liteCheck, sessionStatusType, _b, promoted, slug, token, responseID, deployment, hash, requested, domain, error_4;
             return __generator(this, function (_c) {
                 switch (_c.label) {
                     case 0:
@@ -3712,6 +3771,10 @@ var Gatekeeper = /** @class */ (function () {
                         // Lite validator check - EARLY EXIT
                         logger(this.options.debug, "info", "[Lite Validator] Performing lite validator check in validateRequestClientSideMode");
                         liteCheck = this.shouldRedirectToLiteValidator();
+                        // Store domain from lite validator if available
+                        if (liteCheck.domain) {
+                            result.domain = liteCheck.domain;
+                        }
                         if (liteCheck.redirect) {
                             logger(this.options.debug, "info", "[Lite Validator] Lite validator redirect triggered in clientside mode");
                             result.liteValidatorRedirect = true;
@@ -3736,8 +3799,12 @@ var Gatekeeper = /** @class */ (function () {
                         }
                         // Processing based on promotion status
                         if (this.sessionStatus) {
-                            _b = this.sessionStatus.result, promoted = _b.promoted, slug = _b.slug, token = _b.token, responseID = _b.responseID, deployment = _b.deployment, hash = _b.hash, requested = _b.requested;
+                            _b = this.sessionStatus.result, promoted = _b.promoted, slug = _b.slug, token = _b.token, responseID = _b.responseID, deployment = _b.deployment, hash = _b.hash, requested = _b.requested, domain = _b.domain;
                             result.promoted = promoted === 1;
+                            // Pass domain from API response if available
+                            if (domain) {
+                                result.domain = domain;
+                            }
                             result.slug = slug || result.slug;
                             this.token = token || this.token;
                             result.token = token || result.token;
@@ -3812,6 +3879,10 @@ var Gatekeeper = /** @class */ (function () {
                         this.getCookie();
                         this.extractToken();
                         liteCheck = this.shouldRedirectToLiteValidator();
+                        // Store domain from lite validator if available
+                        if (liteCheck.domain) {
+                            result.domain = liteCheck.domain;
+                        }
                         if (liteCheck.redirect) {
                             result.liteValidatorRedirect = true;
                             result.liteValidatorUrl = liteCheck.url;
@@ -3881,6 +3952,10 @@ var Gatekeeper = /** @class */ (function () {
                             }
                         }
                         token = void 0;
+                        // Pass domain from API response if available
+                        if (this.sessionStatus && this.sessionStatus.result.domain) {
+                            result.domain = this.sessionStatus.result.domain;
+                        }
                         if (this.sessionStatus && this.sessionStatus.result.promoted === 0) {
                             if (this.sessionStatus.result.token) {
                                 token = this.sessionStatus.result.token;
@@ -3942,6 +4017,10 @@ var Gatekeeper = /** @class */ (function () {
                                 }
                                 return [2 /*return*/, result];
                             }
+                        }
+                        // Pass domain from API response if available
+                        if (this.sessionStatus && this.sessionStatus.result.domain) {
+                            result.domain = this.sessionStatus.result.domain;
                         }
                         if (this.sessionStatus && this.sessionStatus.result.promoted === 0) {
                             result.promoted = false;

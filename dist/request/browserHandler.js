@@ -24,12 +24,16 @@ var BrowserHandler = /** @class */ (function () {
     BrowserHandler.prototype.getAbsoluteUri = function () {
         return window.location.href;
     };
-    BrowserHandler.prototype.setCookie = function (value, cookieName) {
+    BrowserHandler.prototype.setCookie = function (value, cookieName, domain) {
         if (cookieName === void 0) { cookieName = "crowdhandler"; }
         var cookieOptions = {
             path: "/",
             secure: true, // cookie will only be sent over HTTPS
         };
+        // Add domain if provided
+        if (domain) {
+            cookieOptions.domain = domain;
+        }
         document.cookie = "".concat(cookieName, "=").concat(value, "; ").concat(Object.keys(cookieOptions)
             .map(function (key) { return "".concat(key, "=").concat(cookieOptions[key]); })
             .join("; "));

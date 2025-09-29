@@ -198,18 +198,25 @@ export declare class Gatekeeper {
         deployment: string;
     };
     /**
+     * Detects if a domain pattern contains a wildcard and extracts the root domain for cookie setting
+     * @param domainPattern - The domain pattern from room config (e.g., "https://*.example.com")
+     * @returns Object with isWildcard flag and optional rootDomain for cookie
+     */
+    private detectWildcardAndRoot;
+    /**
      * Sets the CrowdHandler session cookie. Always call this when result.setCookie is true
      * to maintain the user's queue position.
      *
      * @param {string} value - The cookie value to set (from result.cookieValue)
+     * @param {string} domain - Optional domain pattern to determine cookie domain scope
      * @returns {boolean} True if the cookie was successfully set, false otherwise
      *
      * @example
      * if (result.setCookie) {
-     *   gatekeeper.setCookie(result.cookieValue);
+     *   gatekeeper.setCookie(result.cookieValue, result.domain);
      * }
      */
-    setCookie(value: string): boolean;
+    setCookie(value: string, domain?: string): boolean;
     /**
      * Set a local storage item.
      *
@@ -333,6 +340,7 @@ export declare class Gatekeeper {
         requested?: string | undefined;
         liteValidatorRedirect?: boolean | undefined;
         liteValidatorUrl?: string | undefined;
+        domain?: string | undefined;
     } | undefined>;
     /**
      * Validate request in a client-side mode.

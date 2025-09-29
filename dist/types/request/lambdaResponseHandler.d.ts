@@ -9,5 +9,5 @@ export declare class LambdaResponseHandler {
     getHost(): string;
     getProtocol(): string;
     getPath(): string;
-    setCookie(value: z.infer<typeof CookieObject>, cookieName?: string): CloudFrontResponse;
+    setCookie(value: z.infer<typeof CookieObject>, cookieName?: string, domain?: string): CloudFrontResponse;
 }
