@@ -1300,6 +1300,10 @@ export class Gatekeeper {
    * - `hash` {string | null} - Signature hash for validation (when available)
    * - `liteValidatorRedirect` {boolean} - Whether to redirect for lite validation
    * - `liteValidatorUrl` {string} - URL for lite validator redirect
+   * - `error` {object | undefined} - Error information if validation encountered an issue:
+   *   - `message` {string} - The error message from the API
+   *   - `statusCode` {number | undefined} - HTTP status code (e.g., 401, 500)
+   *   - `code` {string | undefined} - Error code for programmatic handling
    * 
    * @example
    * const result = await gatekeeper.validateRequest();
@@ -1317,7 +1321,17 @@ export class Gatekeeper {
    *   }
    * });
    * 
-   * @throws {CrowdHandlerError} When API connection fails (check error.code === 'API_CONNECTION_FAILED')
+   * @example
+   * // Handling errors in the result
+   * const result = await gatekeeper.validateRequest();
+   * if (result.error) {
+   *   console.error(`API Error ${result.error.statusCode}: ${result.error.message}`);
+   *   // Note: promoted is still set based on error type
+   *   // 4xx errors: promoted = false
+   *   // 5xx errors: promoted based on trustOnFail setting
+   * }
+   * 
+   * @throws {CrowdHandlerError} When SDK configuration fails or network errors occur
    */
   public async validateRequest(params?: { custom?: Record<string, any> }) {
     switch (this.options.mode) {
@@ -1348,6 +1362,9 @@ export class Gatekeeper {
   private async validateRequestClientSideMode(customParams?: Record<string, any>): Promise<
     z.infer<typeof ValidateRequestObject>
   > {
+    // Process URL early to ensure targetURL is set for all scenarios (errors, redirects, etc.)
+    this.processURL();
+    
     // Initial result object with default values
     let result: z.infer<typeof ValidateRequestObject> = {
       promoted: false,
@@ -1357,12 +1374,41 @@ export class Gatekeeper {
       cookieValue: "",
       responseID: "",
       slug: "",
-      targetURL: "",
+      targetURL: this.targetURL || "",
       deployment: "",
       hash: null,
       token: "",
       requested: "",
     };
+
+    // Check for test error simulation (for integrator testing)
+    if (this.options.testError) {
+      logger(this.options.debug, "info", `[TEST MODE] Simulating error with status ${this.options.testError.statusCode}`);
+      
+      const statusCode = this.options.testError.statusCode;
+      const errorMessage = this.options.testError.message || `Simulated error with status ${statusCode}`;
+      
+      // Apply same logic as real errors
+      if (statusCode >= 400 && statusCode < 500) {
+        result.promoted = false;
+        if (this.options.fallbackSlug) {
+          result.slug = this.options.fallbackSlug;
+        }
+      } else {
+        result.promoted = this.options.trustOnFail;
+        if (!this.options.trustOnFail && this.options.fallbackSlug) {
+          result.slug = this.options.fallbackSlug;
+        }
+      }
+      
+      result.error = {
+        message: errorMessage,
+        statusCode: statusCode,
+        code: statusCode === 429 ? 'RATE_LIMITED' : 'API_INVALID_RESPONSE'
+      };
+      
+      return result;
+    }
 
     try {
       // Log details for debugging
@@ -1379,8 +1425,7 @@ export class Gatekeeper {
         return result;
       }
 
-      this.processURL();
-      result.targetURL = this.targetURL || "";
+      // URL already processed at the beginning of method
       this.getCookie();
       this.extractToken();
       
@@ -1402,7 +1447,12 @@ export class Gatekeeper {
       }
       logger(this.options.debug, "info", "[Lite Validator] Continuing with normal validation")
       
-      await this.getSessionStatus(customParams);
+      // Merge ch-code from query string with custom params if present
+      const mergedParams = {
+        ...customParams,
+        ...(this.specialParameters.chCode && { code: this.specialParameters.chCode })
+      };
+      await this.getSessionStatus(mergedParams);
 
       // Use zod safeparse to check that we're working with the SessionStatusErrorWrapper type
       let sessionStatusType = HttpErrorWrapper.safeParse(this.sessionStatus);
@@ -1410,10 +1460,30 @@ export class Gatekeeper {
       // Handle session status errors
       if (sessionStatusType.success) {
         if (this.sessionStatus?.result.status !== 200) {
-          // Can't process the request but we can trust it if trustOnFail is set to true
-          result.promoted = this.options.trustOnFail;
-          if (!this.options.trustOnFail)
-            result.slug = this.options.fallbackSlug;
+          const status = this.sessionStatus?.result?.status || 0;
+          const errorMessage = this.sessionStatus?.result?.error || `API request failed with status ${status}`;
+          
+          // Determine promoted based on error type
+          if (status && status >= 400 && status < 500) {
+            // Client errors (4xx) - never promote
+            result.promoted = false;
+            if (this.options.fallbackSlug) {
+              result.slug = this.options.fallbackSlug;
+            }
+          } else {
+            // Server errors (5xx) or other errors - respect trustOnFail
+            result.promoted = this.options.trustOnFail;
+            if (!this.options.trustOnFail && this.options.fallbackSlug) {
+              result.slug = this.options.fallbackSlug;
+            }
+          }
+          
+          // Always populate error information
+          result.error = {
+            message: errorMessage,
+            statusCode: status || undefined,
+            code: status === 429 ? 'RATE_LIMITED' : 'API_INVALID_RESPONSE'
+          };
 
           return result;
         }
@@ -1472,6 +1542,9 @@ export class Gatekeeper {
   private async validateRequestFullMode(customParams?: Record<string, any>): Promise<
     z.infer<typeof ValidateRequestObject>
   > {
+    // Process URL early to ensure targetURL is set for all scenarios (errors, redirects, etc.)
+    this.processURL();
+    
     // Default result object
     let result: z.infer<typeof ValidateRequestObject> = {
       promoted: false,
@@ -1481,12 +1554,41 @@ export class Gatekeeper {
       cookieValue: "",
       responseID: "",
       slug: "",
-      targetURL: "",
+      targetURL: this.targetURL || "",
       deployment: "",
       hash: null,
       token: "",
       requested: "",
     };
+
+    // Check for test error simulation (for integrator testing)
+    if (this.options.testError) {
+      logger(this.options.debug, "info", `[TEST MODE] Simulating error with status ${this.options.testError.statusCode}`);
+      
+      const statusCode = this.options.testError.statusCode;
+      const errorMessage = this.options.testError.message || `Simulated error with status ${statusCode}`;
+      
+      // Apply same logic as real errors
+      if (statusCode >= 400 && statusCode < 500) {
+        result.promoted = false;
+        if (this.options.fallbackSlug) {
+          result.slug = this.options.fallbackSlug;
+        }
+      } else {
+        result.promoted = this.options.trustOnFail;
+        if (!this.options.trustOnFail && this.options.fallbackSlug) {
+          result.slug = this.options.fallbackSlug;
+        }
+      }
+      
+      result.error = {
+        message: errorMessage,
+        statusCode: statusCode,
+        code: statusCode === 429 ? 'RATE_LIMITED' : 'API_INVALID_RESPONSE'
+      };
+      
+      return result;
+    }
 
     try {
       // Log details for debugging
@@ -1503,8 +1605,7 @@ export class Gatekeeper {
         return result;
       }
 
-      this.processURL();
-      result.targetURL = this.targetURL;
+      // URL already processed at the beginning of method
       this.getCookie();
       this.extractToken();
       
@@ -1526,7 +1627,12 @@ export class Gatekeeper {
       }
       logger(this.options.debug, "info", "[Lite Validator] Continuing with normal validation")
       
-      await this.getSessionStatus(customParams);
+      // Merge ch-code from query string with custom params if present
+      const mergedParams = {
+        ...customParams,
+        ...(this.specialParameters.chCode && { code: this.specialParameters.chCode })
+      };
+      await this.getSessionStatus(mergedParams);
 
       // Use zod safeparse to check that we're working with the SessionStatusErrorWrapper type
       let sessionStatusType = HttpErrorWrapper.safeParse(this.sessionStatus);
@@ -1534,10 +1640,30 @@ export class Gatekeeper {
       // Handle session status errors
       if (sessionStatusType.success) {
         if (this.sessionStatus?.result.status !== 200) {
-          // Can't process the request but we can trust it if trustOnFail is set to true
-          result.promoted = this.options.trustOnFail;
-          if (!this.options.trustOnFail)
-            result.slug = this.options.fallbackSlug;
+          const status = this.sessionStatus?.result?.status || 0;
+          const errorMessage = this.sessionStatus?.result?.error || `API request failed with status ${status}`;
+          
+          // Determine promoted based on error type
+          if (status && status >= 400 && status < 500) {
+            // Client errors (4xx) - never promote
+            result.promoted = false;
+            if (this.options.fallbackSlug) {
+              result.slug = this.options.fallbackSlug;
+            }
+          } else {
+            // Server errors (5xx) or other errors - respect trustOnFail
+            result.promoted = this.options.trustOnFail;
+            if (!this.options.trustOnFail && this.options.fallbackSlug) {
+              result.slug = this.options.fallbackSlug;
+            }
+          }
+          
+          // Always populate error information
+          result.error = {
+            message: errorMessage,
+            statusCode: status || undefined,
+            code: status === 429 ? 'RATE_LIMITED' : 'API_INVALID_RESPONSE'
+          };
 
           return result;
         }
@@ -1599,6 +1725,9 @@ export class Gatekeeper {
     let freshSignature;
     let processedCookie;
 
+    // Process URL early to ensure targetURL is set for all scenarios (errors, redirects, etc.)
+    this.processURL();
+
     let result: z.infer<typeof ValidateRequestObject> = {
       promoted: false,
       stripParams: false,
@@ -1607,12 +1736,41 @@ export class Gatekeeper {
       cookieValue: "",
       responseID: "",
       slug: "",
-      targetURL: "",
+      targetURL: this.targetURL || "",
       deployment: "",
       hash: null,
       token: "",
       requested: "",
     };
+
+    // Check for test error simulation (for integrator testing)
+    if (this.options.testError) {
+      logger(this.options.debug, "info", `[TEST MODE] Simulating error with status ${this.options.testError.statusCode}`);
+      
+      const statusCode = this.options.testError.statusCode;
+      const errorMessage = this.options.testError.message || `Simulated error with status ${statusCode}`;
+      
+      // Apply same logic as real errors
+      if (statusCode >= 400 && statusCode < 500) {
+        result.promoted = false;
+        if (this.options.fallbackSlug) {
+          result.slug = this.options.fallbackSlug;
+        }
+      } else {
+        result.promoted = this.options.trustOnFail;
+        if (!this.options.trustOnFail && this.options.fallbackSlug) {
+          result.slug = this.options.fallbackSlug;
+        }
+      }
+      
+      result.error = {
+        message: errorMessage,
+        statusCode: statusCode,
+        code: statusCode === 429 ? 'RATE_LIMITED' : 'API_INVALID_RESPONSE'
+      };
+      
+      return result;
+    }
 
     logger(this.options.debug, "info", "IP: " + this.ip);
     logger(this.options.debug, "info", "Agent: " + this.agent);
@@ -1627,9 +1785,7 @@ export class Gatekeeper {
       return result;
     }
 
-    this.processURL();
-    result.targetURL = this.targetURL;
-
+    // URL already processed at the beginning of method
     this.getCookie();
     this.extractToken();
     
@@ -1656,12 +1812,21 @@ export class Gatekeeper {
     if (configStatusType.success) {
       if (this.activeConfig && this.activeConfig.result.status !== 200) {
         //Can't process the request but we can trust it if trustOnFail is set to true
-        if (this.options.trustOnFail) {
-          result.promoted = true;
-        } else {
-          result.promoted = false;
+        const status = this.activeConfig?.result?.status || 0;
+        const errorMessage = this.activeConfig?.result?.error || `API request failed with status ${status}`;
+        
+        // Config errors should respect trustOnFail (it's a system issue, not user error)
+        result.promoted = this.options.trustOnFail;
+        if (!this.options.trustOnFail && this.options.fallbackSlug) {
           result.slug = this.options.fallbackSlug;
         }
+        
+        // Always populate error information
+        result.error = {
+          message: errorMessage,
+          statusCode: status || undefined,
+          code: 'API_INVALID_RESPONSE'
+        };
 
         return result;
       }
@@ -1715,7 +1880,12 @@ export class Gatekeeper {
       );
 
       try {
-        await this.getSessionStatus(customParams);
+        // Merge ch-code from query string with custom params if present
+      const mergedParams = {
+        ...customParams,
+        ...(this.specialParameters.chCode && { code: this.specialParameters.chCode })
+      };
+      await this.getSessionStatus(mergedParams);
 
         //Handle a failed session status check
         //Use zod safeparse to check that we're working with the SessionStatusErrorWrapper type
@@ -1724,12 +1894,30 @@ export class Gatekeeper {
         if (sessionStatusType.success) {
           if (this.sessionStatus && this.sessionStatus.result.status !== 200) {
             //Can't process the request but we can trust it if trustOnFail is set to true
-            if (this.options.trustOnFail) {
-              result.promoted = true;
-            } else {
+            const status = this.sessionStatus?.result?.status || 0;
+            const errorMessage = this.sessionStatus?.result?.error || `API request failed with status ${status}`;
+            
+            // Determine promoted based on error type
+            if (status && status >= 400 && status < 500) {
+              // Client errors (4xx) - never promote
               result.promoted = false;
-              result.slug = this.options.fallbackSlug;
+              if (this.options.fallbackSlug) {
+                result.slug = this.options.fallbackSlug;
+              }
+            } else {
+              // Server errors (5xx) or other errors - respect trustOnFail
+              result.promoted = this.options.trustOnFail;
+              if (!this.options.trustOnFail && this.options.fallbackSlug) {
+                result.slug = this.options.fallbackSlug;
+              }
             }
+            
+            // Always populate error information
+            result.error = {
+              message: errorMessage,
+              statusCode: status || undefined,
+              code: status === 429 ? 'RATE_LIMITED' : 'API_INVALID_RESPONSE'
+            };
 
             return result;
           }
@@ -1804,7 +1992,12 @@ export class Gatekeeper {
       );
 
       try {
-        await this.getSessionStatus(customParams);
+        // Merge ch-code from query string with custom params if present
+      const mergedParams = {
+        ...customParams,
+        ...(this.specialParameters.chCode && { code: this.specialParameters.chCode })
+      };
+      await this.getSessionStatus(mergedParams);
 
         //Handle a failed session status check
         //Use zod safeparse to check that we're working with the SessionStatusErrorWrapper type
@@ -1813,12 +2006,30 @@ export class Gatekeeper {
         if (sessionStatusType.success) {
           if (this.sessionStatus && this.sessionStatus.result.status !== 200) {
             //Can't process the request but we can trust it if trustOnFail is set to true
-            if (this.options.trustOnFail) {
-              result.promoted = true;
-            } else {
+            const status = this.sessionStatus?.result?.status || 0;
+            const errorMessage = this.sessionStatus?.result?.error || `API request failed with status ${status}`;
+            
+            // Determine promoted based on error type
+            if (status && status >= 400 && status < 500) {
+              // Client errors (4xx) - never promote
               result.promoted = false;
-              result.slug = this.options.fallbackSlug;
+              if (this.options.fallbackSlug) {
+                result.slug = this.options.fallbackSlug;
+              }
+            } else {
+              // Server errors (5xx) or other errors - respect trustOnFail
+              result.promoted = this.options.trustOnFail;
+              if (!this.options.trustOnFail && this.options.fallbackSlug) {
+                result.slug = this.options.fallbackSlug;
+              }
             }
+            
+            // Always populate error information
+            result.error = {
+              message: errorMessage,
+              statusCode: status || undefined,
+              code: status === 429 ? 'RATE_LIMITED' : 'API_INVALID_RESPONSE'
+            };
 
             return result;
           }

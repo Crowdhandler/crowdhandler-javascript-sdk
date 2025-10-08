@@ -44,15 +44,27 @@ const crowdHandlerMiddleware = async (req, res, next) => {
       }
     }
 
-    const ch_status = await gatekeeper.validateRequest();
+    try {
+      const ch_status = await gatekeeper.validateRequest();
 
-    // If the request is not promoted, send a 403 Forbidden response and do not proceed to the next middleware
-    if (!ch_status.promoted) {
-      res.status(403).send("Forbidden");
-      return;
-    } else {
-      // If the request is promoted, save the gatekeeper instance in res.locals for later use
-      res.locals.gatekeeper = gatekeeper;
+      // If the request is not promoted, send a 403 Forbidden response and do not proceed to the next middleware
+      if (!ch_status.promoted) {
+        res.status(403).send("Forbidden");
+        return;
+      } else {
+        // If the request is promoted, save the gatekeeper instance in res.locals for later use
+        res.locals.gatekeeper = gatekeeper;
+      }
+    } catch (error) {
+      // Log the validation error
+      console.error('CrowdHandler API error:', error.message);
+      console.error('Status code:', error.statusCode);
+      
+      // Return appropriate error response
+      if (error.statusCode === 429) {
+        return res.status(429).json({ error: 'Rate limited. Please try again later.' });
+      }
+      return res.status(500).json({ error: 'Unable to validate request' });
     }
   }
   // Continue to the next middleware or route handler

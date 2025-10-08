@@ -13,6 +13,18 @@ const crowdHandlerMiddleware = async (req, res, next) => {
   try {
     const chStatus = await gatekeeper.validateRequest();
 
+    // Check if validation encountered an error
+    if (chStatus.error) {
+      console.error(`CrowdHandler API error ${chStatus.error.statusCode}: ${chStatus.error.message}`);
+      
+      // Important: The request still has a promoted status even with errors
+      // - 4xx errors: promoted = false (user is blocked)
+      // - 5xx errors: promoted depends on trustOnFail setting
+      
+      // You might want to track these errors for monitoring
+      // For example, send to your logging service
+    }
+
     if (chStatus.setCookie) {
       gatekeeper.setCookie(chStatus.cookieValue, chStatus.domain);
     }
@@ -30,9 +42,18 @@ const crowdHandlerMiddleware = async (req, res, next) => {
 
     // Continue to the next middleware or route handler
     next();
-  } catch (err) {
-    // Error handling middleware
-    next(err);
+  } catch (error) {
+    // This catches unexpected SDK errors (e.g., network failures, config issues)
+    console.error('CrowdHandler SDK error:', error.message);
+    
+    // With trustOnFail: true (default), you might allow access
+    // With trustOnFail: false, you might block access or show error page
+    
+    // For critical routes, you might want to be more restrictive:
+    // return res.status(503).send('Service temporarily unavailable');
+    
+    // For less critical routes, you might allow access:
+    next();
   }
 };
 

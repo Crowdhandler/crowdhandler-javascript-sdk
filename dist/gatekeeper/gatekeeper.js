@@ -1,4 +1,15 @@
 "use strict";
+var __assign = (this && this.__assign) || function () {
+    __assign = Object.assign || function(t) {
+        for (var s, i = 1, n = arguments.length; i < n; i++) {
+            s = arguments[i];
+            for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p))
+                t[p] = s[p];
+        }
+        return t;
+    };
+    return __assign.apply(this, arguments);
+};
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -1067,6 +1078,10 @@ var Gatekeeper = /** @class */ (function () {
      * - `hash` {string | null} - Signature hash for validation (when available)
      * - `liteValidatorRedirect` {boolean} - Whether to redirect for lite validation
      * - `liteValidatorUrl` {string} - URL for lite validator redirect
+     * - `error` {object | undefined} - Error information if validation encountered an issue:
+     *   - `message` {string} - The error message from the API
+     *   - `statusCode` {number | undefined} - HTTP status code (e.g., 401, 500)
+     *   - `code` {string | undefined} - Error code for programmatic handling
      *
      * @example
      * const result = await gatekeeper.validateRequest();
@@ -1084,7 +1099,17 @@ var Gatekeeper = /** @class */ (function () {
      *   }
      * });
      *
-     * @throws {CrowdHandlerError} When API connection fails (check error.code === 'API_CONNECTION_FAILED')
+     * @example
+     * // Handling errors in the result
+     * const result = await gatekeeper.validateRequest();
+     * if (result.error) {
+     *   console.error(`API Error ${result.error.statusCode}: ${result.error.message}`);
+     *   // Note: promoted is still set based on error type
+     *   // 4xx errors: promoted = false
+     *   // 5xx errors: promoted based on trustOnFail setting
+     * }
+     *
+     * @throws {CrowdHandlerError} When SDK configuration fails or network errors occur
      */
     Gatekeeper.prototype.validateRequest = function (params) {
         return __awaiter(this, void 0, void 0, function () {
@@ -1123,12 +1148,14 @@ var Gatekeeper = /** @class */ (function () {
      * @return {Promise<z.infer<typeof validateRequestObject>>} Result of the validation process.
      */
     Gatekeeper.prototype.validateRequestClientSideMode = function (customParams) {
-        var _a;
+        var _a, _b, _c, _d, _e;
         return __awaiter(this, void 0, void 0, function () {
-            var result, liteCheck, sessionStatusType, _b, promoted, slug, token, responseID, deployment, hash, requested, domain, error_3;
-            return __generator(this, function (_c) {
-                switch (_c.label) {
+            var result, statusCode, errorMessage, liteCheck, mergedParams, sessionStatusType, status_1, errorMessage, _f, promoted, slug, token, responseID, deployment, hash, requested, domain, error_3;
+            return __generator(this, function (_g) {
+                switch (_g.label) {
                     case 0:
+                        // Process URL early to ensure targetURL is set for all scenarios (errors, redirects, etc.)
+                        this.processURL();
                         result = {
                             promoted: false,
                             stripParams: false,
@@ -1137,15 +1164,40 @@ var Gatekeeper = /** @class */ (function () {
                             cookieValue: "",
                             responseID: "",
                             slug: "",
-                            targetURL: "",
+                            targetURL: this.targetURL || "",
                             deployment: "",
                             hash: null,
                             token: "",
                             requested: "",
                         };
-                        _c.label = 1;
+                        // Check for test error simulation (for integrator testing)
+                        if (this.options.testError) {
+                            (0, logger_1.logger)(this.options.debug, "info", "[TEST MODE] Simulating error with status ".concat(this.options.testError.statusCode));
+                            statusCode = this.options.testError.statusCode;
+                            errorMessage = this.options.testError.message || "Simulated error with status ".concat(statusCode);
+                            // Apply same logic as real errors
+                            if (statusCode >= 400 && statusCode < 500) {
+                                result.promoted = false;
+                                if (this.options.fallbackSlug) {
+                                    result.slug = this.options.fallbackSlug;
+                                }
+                            }
+                            else {
+                                result.promoted = this.options.trustOnFail;
+                                if (!this.options.trustOnFail && this.options.fallbackSlug) {
+                                    result.slug = this.options.fallbackSlug;
+                                }
+                            }
+                            result.error = {
+                                message: errorMessage,
+                                statusCode: statusCode,
+                                code: statusCode === 429 ? 'RATE_LIMITED' : 'API_INVALID_RESPONSE'
+                            };
+                            return [2 /*return*/, result];
+                        }
+                        _g.label = 1;
                     case 1:
-                        _c.trys.push([1, 3, , 4]);
+                        _g.trys.push([1, 3, , 4]);
                         // Log details for debugging
                         (0, logger_1.logger)(this.options.debug, "info", "IP: ".concat(this.ip));
                         (0, logger_1.logger)(this.options.debug, "info", "Agent: ".concat(this.agent));
@@ -1158,8 +1210,7 @@ var Gatekeeper = /** @class */ (function () {
                             result.promoted = true;
                             return [2 /*return*/, result];
                         }
-                        this.processURL();
-                        result.targetURL = this.targetURL || "";
+                        // URL already processed at the beginning of method
                         this.getCookie();
                         this.extractToken();
                         // Lite validator check - EARLY EXIT
@@ -1177,23 +1228,43 @@ var Gatekeeper = /** @class */ (function () {
                             return [2 /*return*/, result];
                         }
                         (0, logger_1.logger)(this.options.debug, "info", "[Lite Validator] Continuing with normal validation");
-                        return [4 /*yield*/, this.getSessionStatus(customParams)];
+                        mergedParams = __assign(__assign({}, customParams), (this.specialParameters.chCode && { code: this.specialParameters.chCode }));
+                        return [4 /*yield*/, this.getSessionStatus(mergedParams)];
                     case 2:
-                        _c.sent();
+                        _g.sent();
                         sessionStatusType = types_1.HttpErrorWrapper.safeParse(this.sessionStatus);
                         // Handle session status errors
                         if (sessionStatusType.success) {
                             if (((_a = this.sessionStatus) === null || _a === void 0 ? void 0 : _a.result.status) !== 200) {
-                                // Can't process the request but we can trust it if trustOnFail is set to true
-                                result.promoted = this.options.trustOnFail;
-                                if (!this.options.trustOnFail)
-                                    result.slug = this.options.fallbackSlug;
+                                status_1 = ((_c = (_b = this.sessionStatus) === null || _b === void 0 ? void 0 : _b.result) === null || _c === void 0 ? void 0 : _c.status) || 0;
+                                errorMessage = ((_e = (_d = this.sessionStatus) === null || _d === void 0 ? void 0 : _d.result) === null || _e === void 0 ? void 0 : _e.error) || "API request failed with status ".concat(status_1);
+                                // Determine promoted based on error type
+                                if (status_1 && status_1 >= 400 && status_1 < 500) {
+                                    // Client errors (4xx) - never promote
+                                    result.promoted = false;
+                                    if (this.options.fallbackSlug) {
+                                        result.slug = this.options.fallbackSlug;
+                                    }
+                                }
+                                else {
+                                    // Server errors (5xx) or other errors - respect trustOnFail
+                                    result.promoted = this.options.trustOnFail;
+                                    if (!this.options.trustOnFail && this.options.fallbackSlug) {
+                                        result.slug = this.options.fallbackSlug;
+                                    }
+                                }
+                                // Always populate error information
+                                result.error = {
+                                    message: errorMessage,
+                                    statusCode: status_1 || undefined,
+                                    code: status_1 === 429 ? 'RATE_LIMITED' : 'API_INVALID_RESPONSE'
+                                };
                                 return [2 /*return*/, result];
                             }
                         }
                         // Processing based on promotion status
                         if (this.sessionStatus) {
-                            _b = this.sessionStatus.result, promoted = _b.promoted, slug = _b.slug, token = _b.token, responseID = _b.responseID, deployment = _b.deployment, hash = _b.hash, requested = _b.requested, domain = _b.domain;
+                            _f = this.sessionStatus.result, promoted = _f.promoted, slug = _f.slug, token = _f.token, responseID = _f.responseID, deployment = _f.deployment, hash = _f.hash, requested = _f.requested, domain = _f.domain;
                             result.promoted = promoted === 1;
                             // Pass domain from API response if available
                             if (domain) {
@@ -1220,7 +1291,7 @@ var Gatekeeper = /** @class */ (function () {
                         }
                         return [2 /*return*/, result];
                     case 3:
-                        error_3 = _c.sent();
+                        error_3 = _g.sent();
                         (0, logger_1.logger)(this.options.debug, "error", "An error occurred during request validation: ".concat(error_3));
                         throw error_3;
                     case 4: return [2 /*return*/];
@@ -1235,12 +1306,14 @@ var Gatekeeper = /** @class */ (function () {
      * @return {Promise<z.infer<typeof ValidateRequestObject>>} - The resulting status after validating the request.
      */
     Gatekeeper.prototype.validateRequestFullMode = function (customParams) {
-        var _a;
+        var _a, _b, _c, _d, _e;
         return __awaiter(this, void 0, void 0, function () {
-            var result, liteCheck, sessionStatusType, _b, promoted, slug, token, responseID, deployment, hash, requested, domain, error_4;
-            return __generator(this, function (_c) {
-                switch (_c.label) {
+            var result, statusCode, errorMessage, liteCheck, mergedParams, sessionStatusType, status_2, errorMessage, _f, promoted, slug, token, responseID, deployment, hash, requested, domain, error_4;
+            return __generator(this, function (_g) {
+                switch (_g.label) {
                     case 0:
+                        // Process URL early to ensure targetURL is set for all scenarios (errors, redirects, etc.)
+                        this.processURL();
                         result = {
                             promoted: false,
                             stripParams: false,
@@ -1249,15 +1322,40 @@ var Gatekeeper = /** @class */ (function () {
                             cookieValue: "",
                             responseID: "",
                             slug: "",
-                            targetURL: "",
+                            targetURL: this.targetURL || "",
                             deployment: "",
                             hash: null,
                             token: "",
                             requested: "",
                         };
-                        _c.label = 1;
+                        // Check for test error simulation (for integrator testing)
+                        if (this.options.testError) {
+                            (0, logger_1.logger)(this.options.debug, "info", "[TEST MODE] Simulating error with status ".concat(this.options.testError.statusCode));
+                            statusCode = this.options.testError.statusCode;
+                            errorMessage = this.options.testError.message || "Simulated error with status ".concat(statusCode);
+                            // Apply same logic as real errors
+                            if (statusCode >= 400 && statusCode < 500) {
+                                result.promoted = false;
+                                if (this.options.fallbackSlug) {
+                                    result.slug = this.options.fallbackSlug;
+                                }
+                            }
+                            else {
+                                result.promoted = this.options.trustOnFail;
+                                if (!this.options.trustOnFail && this.options.fallbackSlug) {
+                                    result.slug = this.options.fallbackSlug;
+                                }
+                            }
+                            result.error = {
+                                message: errorMessage,
+                                statusCode: statusCode,
+                                code: statusCode === 429 ? 'RATE_LIMITED' : 'API_INVALID_RESPONSE'
+                            };
+                            return [2 /*return*/, result];
+                        }
+                        _g.label = 1;
                     case 1:
-                        _c.trys.push([1, 3, , 4]);
+                        _g.trys.push([1, 3, , 4]);
                         // Log details for debugging
                         (0, logger_1.logger)(this.options.debug, "info", "IP: ".concat(this.ip));
                         (0, logger_1.logger)(this.options.debug, "info", "Agent: ".concat(this.agent));
@@ -1270,8 +1368,7 @@ var Gatekeeper = /** @class */ (function () {
                             result.promoted = true;
                             return [2 /*return*/, result];
                         }
-                        this.processURL();
-                        result.targetURL = this.targetURL;
+                        // URL already processed at the beginning of method
                         this.getCookie();
                         this.extractToken();
                         // Lite validator check - EARLY EXIT
@@ -1289,23 +1386,43 @@ var Gatekeeper = /** @class */ (function () {
                             return [2 /*return*/, result];
                         }
                         (0, logger_1.logger)(this.options.debug, "info", "[Lite Validator] Continuing with normal validation");
-                        return [4 /*yield*/, this.getSessionStatus(customParams)];
+                        mergedParams = __assign(__assign({}, customParams), (this.specialParameters.chCode && { code: this.specialParameters.chCode }));
+                        return [4 /*yield*/, this.getSessionStatus(mergedParams)];
                     case 2:
-                        _c.sent();
+                        _g.sent();
                         sessionStatusType = types_1.HttpErrorWrapper.safeParse(this.sessionStatus);
                         // Handle session status errors
                         if (sessionStatusType.success) {
                             if (((_a = this.sessionStatus) === null || _a === void 0 ? void 0 : _a.result.status) !== 200) {
-                                // Can't process the request but we can trust it if trustOnFail is set to true
-                                result.promoted = this.options.trustOnFail;
-                                if (!this.options.trustOnFail)
-                                    result.slug = this.options.fallbackSlug;
+                                status_2 = ((_c = (_b = this.sessionStatus) === null || _b === void 0 ? void 0 : _b.result) === null || _c === void 0 ? void 0 : _c.status) || 0;
+                                errorMessage = ((_e = (_d = this.sessionStatus) === null || _d === void 0 ? void 0 : _d.result) === null || _e === void 0 ? void 0 : _e.error) || "API request failed with status ".concat(status_2);
+                                // Determine promoted based on error type
+                                if (status_2 && status_2 >= 400 && status_2 < 500) {
+                                    // Client errors (4xx) - never promote
+                                    result.promoted = false;
+                                    if (this.options.fallbackSlug) {
+                                        result.slug = this.options.fallbackSlug;
+                                    }
+                                }
+                                else {
+                                    // Server errors (5xx) or other errors - respect trustOnFail
+                                    result.promoted = this.options.trustOnFail;
+                                    if (!this.options.trustOnFail && this.options.fallbackSlug) {
+                                        result.slug = this.options.fallbackSlug;
+                                    }
+                                }
+                                // Always populate error information
+                                result.error = {
+                                    message: errorMessage,
+                                    statusCode: status_2 || undefined,
+                                    code: status_2 === 429 ? 'RATE_LIMITED' : 'API_INVALID_RESPONSE'
+                                };
                                 return [2 /*return*/, result];
                             }
                         }
                         // Processing based on promotion status
                         if (this.sessionStatus) {
-                            _b = this.sessionStatus.result, promoted = _b.promoted, slug = _b.slug, token = _b.token, responseID = _b.responseID, deployment = _b.deployment, hash = _b.hash, requested = _b.requested, domain = _b.domain;
+                            _f = this.sessionStatus.result, promoted = _f.promoted, slug = _f.slug, token = _f.token, responseID = _f.responseID, deployment = _f.deployment, hash = _f.hash, requested = _f.requested, domain = _f.domain;
                             result.promoted = promoted === 1;
                             // Pass domain from API response if available
                             if (domain) {
@@ -1332,7 +1449,7 @@ var Gatekeeper = /** @class */ (function () {
                         }
                         return [2 /*return*/, result];
                     case 3:
-                        error_4 = _c.sent();
+                        error_4 = _g.sent();
                         (0, logger_1.logger)(this.options.debug, "error", "An error occurred during request validation: ".concat(error_4));
                         throw error_4;
                     case 4: return [2 /*return*/];
@@ -1346,15 +1463,17 @@ var Gatekeeper = /** @class */ (function () {
      * @param {Record<string, any>} customParams - Optional custom parameters to include in the API request
      */
     Gatekeeper.prototype.validateRequestHybridMode = function (customParams) {
-        var _a, _b;
+        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p;
         return __awaiter(this, void 0, void 0, function () {
-            var signatures, tokens, freshToken, freshSignature, processedCookie, result, liteCheck, configStatusType, sessionStatusType, token, hash, requested, error_5, validationResult, sessionStatusType, hash, requested, token, error_6, _i, _c, item, _d, _e, item;
+            var signatures, tokens, freshToken, freshSignature, processedCookie, result, statusCode, errorMessage, liteCheck, configStatusType, status_3, errorMessage, mergedParams, sessionStatusType, status_4, errorMessage, token, hash, requested, error_5, validationResult, mergedParams, sessionStatusType, status_5, errorMessage, hash, requested, token, error_6, _i, _q, item, _r, _s, item;
             var _this = this;
-            return __generator(this, function (_f) {
-                switch (_f.label) {
+            return __generator(this, function (_t) {
+                switch (_t.label) {
                     case 0:
                         signatures = [];
                         tokens = [];
+                        // Process URL early to ensure targetURL is set for all scenarios (errors, redirects, etc.)
+                        this.processURL();
                         result = {
                             promoted: false,
                             stripParams: false,
@@ -1363,12 +1482,37 @@ var Gatekeeper = /** @class */ (function () {
                             cookieValue: "",
                             responseID: "",
                             slug: "",
-                            targetURL: "",
+                            targetURL: this.targetURL || "",
                             deployment: "",
                             hash: null,
                             token: "",
                             requested: "",
                         };
+                        // Check for test error simulation (for integrator testing)
+                        if (this.options.testError) {
+                            (0, logger_1.logger)(this.options.debug, "info", "[TEST MODE] Simulating error with status ".concat(this.options.testError.statusCode));
+                            statusCode = this.options.testError.statusCode;
+                            errorMessage = this.options.testError.message || "Simulated error with status ".concat(statusCode);
+                            // Apply same logic as real errors
+                            if (statusCode >= 400 && statusCode < 500) {
+                                result.promoted = false;
+                                if (this.options.fallbackSlug) {
+                                    result.slug = this.options.fallbackSlug;
+                                }
+                            }
+                            else {
+                                result.promoted = this.options.trustOnFail;
+                                if (!this.options.trustOnFail && this.options.fallbackSlug) {
+                                    result.slug = this.options.fallbackSlug;
+                                }
+                            }
+                            result.error = {
+                                message: errorMessage,
+                                statusCode: statusCode,
+                                code: statusCode === 429 ? 'RATE_LIMITED' : 'API_INVALID_RESPONSE'
+                            };
+                            return [2 /*return*/, result];
+                        }
                         (0, logger_1.logger)(this.options.debug, "info", "IP: " + this.ip);
                         (0, logger_1.logger)(this.options.debug, "info", "Agent: " + this.agent);
                         (0, logger_1.logger)(this.options.debug, "info", "Host: " + this.host);
@@ -1380,8 +1524,7 @@ var Gatekeeper = /** @class */ (function () {
                             result.promoted = true;
                             return [2 /*return*/, result];
                         }
-                        this.processURL();
-                        result.targetURL = this.targetURL;
+                        // URL already processed at the beginning of method
                         this.getCookie();
                         this.extractToken();
                         liteCheck = this.shouldRedirectToLiteValidator();
@@ -1397,18 +1540,23 @@ var Gatekeeper = /** @class */ (function () {
                         }
                         return [4 /*yield*/, this.getConfig()];
                     case 1:
-                        _f.sent();
+                        _t.sent();
                         configStatusType = types_1.HttpErrorWrapper.safeParse(this.activeConfig);
                         if (configStatusType.success) {
                             if (this.activeConfig && this.activeConfig.result.status !== 200) {
-                                //Can't process the request but we can trust it if trustOnFail is set to true
-                                if (this.options.trustOnFail) {
-                                    result.promoted = true;
-                                }
-                                else {
-                                    result.promoted = false;
+                                status_3 = ((_b = (_a = this.activeConfig) === null || _a === void 0 ? void 0 : _a.result) === null || _b === void 0 ? void 0 : _b.status) || 0;
+                                errorMessage = ((_d = (_c = this.activeConfig) === null || _c === void 0 ? void 0 : _c.result) === null || _d === void 0 ? void 0 : _d.error) || "API request failed with status ".concat(status_3);
+                                // Config errors should respect trustOnFail (it's a system issue, not user error)
+                                result.promoted = this.options.trustOnFail;
+                                if (!this.options.trustOnFail && this.options.fallbackSlug) {
                                     result.slug = this.options.fallbackSlug;
                                 }
+                                // Always populate error information
+                                result.error = {
+                                    message: errorMessage,
+                                    statusCode: status_3 || undefined,
+                                    code: 'API_INVALID_RESPONSE'
+                                };
                                 return [2 /*return*/, result];
                             }
                         }
@@ -1437,23 +1585,39 @@ var Gatekeeper = /** @class */ (function () {
                             this.complexSignature.length === 0) &&
                             !this.token)) return [3 /*break*/, 5];
                         (0, logger_1.logger)(this.options.debug, "info", "Missing signature and/or token, doing a check.");
-                        _f.label = 2;
+                        _t.label = 2;
                     case 2:
-                        _f.trys.push([2, 4, , 5]);
-                        return [4 /*yield*/, this.getSessionStatus(customParams)];
+                        _t.trys.push([2, 4, , 5]);
+                        mergedParams = __assign(__assign({}, customParams), (this.specialParameters.chCode && { code: this.specialParameters.chCode }));
+                        return [4 /*yield*/, this.getSessionStatus(mergedParams)];
                     case 3:
-                        _f.sent();
+                        _t.sent();
                         sessionStatusType = types_1.HttpErrorWrapper.safeParse(this.sessionStatus);
                         if (sessionStatusType.success) {
                             if (this.sessionStatus && this.sessionStatus.result.status !== 200) {
-                                //Can't process the request but we can trust it if trustOnFail is set to true
-                                if (this.options.trustOnFail) {
-                                    result.promoted = true;
+                                status_4 = ((_f = (_e = this.sessionStatus) === null || _e === void 0 ? void 0 : _e.result) === null || _f === void 0 ? void 0 : _f.status) || 0;
+                                errorMessage = ((_h = (_g = this.sessionStatus) === null || _g === void 0 ? void 0 : _g.result) === null || _h === void 0 ? void 0 : _h.error) || "API request failed with status ".concat(status_4);
+                                // Determine promoted based on error type
+                                if (status_4 && status_4 >= 400 && status_4 < 500) {
+                                    // Client errors (4xx) - never promote
+                                    result.promoted = false;
+                                    if (this.options.fallbackSlug) {
+                                        result.slug = this.options.fallbackSlug;
+                                    }
                                 }
                                 else {
-                                    result.promoted = false;
-                                    result.slug = this.options.fallbackSlug;
+                                    // Server errors (5xx) or other errors - respect trustOnFail
+                                    result.promoted = this.options.trustOnFail;
+                                    if (!this.options.trustOnFail && this.options.fallbackSlug) {
+                                        result.slug = this.options.fallbackSlug;
+                                    }
                                 }
+                                // Always populate error information
+                                result.error = {
+                                    message: errorMessage,
+                                    statusCode: status_4 || undefined,
+                                    code: status_4 === 429 ? 'RATE_LIMITED' : 'API_INVALID_RESPONSE'
+                                };
                                 return [2 /*return*/, result];
                             }
                         }
@@ -1497,7 +1661,7 @@ var Gatekeeper = /** @class */ (function () {
                         }
                         return [3 /*break*/, 5];
                     case 4:
-                        error_5 = _f.sent();
+                        error_5 = _t.sent();
                         (0, logger_1.logger)(this.options.debug, "error", error_5);
                         return [3 /*break*/, 5];
                     case 5:
@@ -1505,23 +1669,39 @@ var Gatekeeper = /** @class */ (function () {
                         validationResult = this.validateSignature();
                         if (!(validationResult.success === false)) return [3 /*break*/, 9];
                         (0, logger_1.logger)(this.options.debug, "info", "Signature not valid. Checking against API.");
-                        _f.label = 6;
+                        _t.label = 6;
                     case 6:
-                        _f.trys.push([6, 8, , 9]);
-                        return [4 /*yield*/, this.getSessionStatus(customParams)];
+                        _t.trys.push([6, 8, , 9]);
+                        mergedParams = __assign(__assign({}, customParams), (this.specialParameters.chCode && { code: this.specialParameters.chCode }));
+                        return [4 /*yield*/, this.getSessionStatus(mergedParams)];
                     case 7:
-                        _f.sent();
+                        _t.sent();
                         sessionStatusType = types_1.HttpErrorWrapper.safeParse(this.sessionStatus);
                         if (sessionStatusType.success) {
                             if (this.sessionStatus && this.sessionStatus.result.status !== 200) {
-                                //Can't process the request but we can trust it if trustOnFail is set to true
-                                if (this.options.trustOnFail) {
-                                    result.promoted = true;
+                                status_5 = ((_k = (_j = this.sessionStatus) === null || _j === void 0 ? void 0 : _j.result) === null || _k === void 0 ? void 0 : _k.status) || 0;
+                                errorMessage = ((_m = (_l = this.sessionStatus) === null || _l === void 0 ? void 0 : _l.result) === null || _m === void 0 ? void 0 : _m.error) || "API request failed with status ".concat(status_5);
+                                // Determine promoted based on error type
+                                if (status_5 && status_5 >= 400 && status_5 < 500) {
+                                    // Client errors (4xx) - never promote
+                                    result.promoted = false;
+                                    if (this.options.fallbackSlug) {
+                                        result.slug = this.options.fallbackSlug;
+                                    }
                                 }
                                 else {
-                                    result.promoted = false;
-                                    result.slug = this.options.fallbackSlug;
+                                    // Server errors (5xx) or other errors - respect trustOnFail
+                                    result.promoted = this.options.trustOnFail;
+                                    if (!this.options.trustOnFail && this.options.fallbackSlug) {
+                                        result.slug = this.options.fallbackSlug;
+                                    }
                                 }
+                                // Always populate error information
+                                result.error = {
+                                    message: errorMessage,
+                                    statusCode: status_5 || undefined,
+                                    code: status_5 === 429 ? 'RATE_LIMITED' : 'API_INVALID_RESPONSE'
+                                };
                                 return [2 /*return*/, result];
                             }
                         }
@@ -1558,7 +1738,7 @@ var Gatekeeper = /** @class */ (function () {
                         }
                         return [3 /*break*/, 9];
                     case 8:
-                        error_6 = _f.sent();
+                        error_6 = _t.sent();
                         (0, logger_1.logger)(this.options.debug, "error", error_6);
                         return [3 /*break*/, 9];
                     case 9:
@@ -1570,8 +1750,8 @@ var Gatekeeper = /** @class */ (function () {
                             if (this.cookieValue) {
                                 this.cookieValue = types_1.CookieObject.parse(this.cookieValue);
                                 if (this.cookieValue) {
-                                    for (_i = 0, _c = this.cookieValue.tokens; _i < _c.length; _i++) {
-                                        item = _c[_i];
+                                    for (_i = 0, _q = this.cookieValue.tokens; _i < _q.length; _i++) {
+                                        item = _q[_i];
                                         tokens.push(item);
                                     }
                                 }
@@ -1588,8 +1768,8 @@ var Gatekeeper = /** @class */ (function () {
                         else {
                             freshToken = false;
                             //We want to work with the most recent array of signatures
-                            for (_d = 0, _e = tokens[tokens.length - 1].signatures; _d < _e.length; _d++) {
-                                item = _e[_d];
+                            for (_r = 0, _s = tokens[tokens.length - 1].signatures; _r < _s.length; _r++) {
+                                item = _s[_r];
                                 signatures.push(item);
                             }
                         }
@@ -1609,8 +1789,8 @@ var Gatekeeper = /** @class */ (function () {
                         }
                         else {
                             tokens[tokens.length - 1].signatures = signatures;
-                            tokens[tokens.length - 1].touched = (_a = this.cookieTokenObject) === null || _a === void 0 ? void 0 : _a.touched;
-                            tokens[tokens.length - 1].touchedSig = (_b = this.cookieTokenObject) === null || _b === void 0 ? void 0 : _b.touchedSig;
+                            tokens[tokens.length - 1].touched = (_o = this.cookieTokenObject) === null || _o === void 0 ? void 0 : _o.touched;
+                            tokens[tokens.length - 1].touchedSig = (_p = this.cookieTokenObject) === null || _p === void 0 ? void 0 : _p.touchedSig;
                         }
                         try {
                             this.cookieValue = this.generateCookie(tokens, this.deployment);

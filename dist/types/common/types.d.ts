@@ -74,6 +74,16 @@ export declare const GatekeeperOptions: z.ZodObject<{
         timeout?: number | undefined;
     }>, "many">>;
     waitingRoom: z.ZodOptional<z.ZodBoolean>;
+    testError: z.ZodOptional<z.ZodObject<{
+        statusCode: z.ZodNumber;
+        message: z.ZodOptional<z.ZodString>;
+    }, "strip", z.ZodTypeAny, {
+        statusCode: number;
+        message?: string | undefined;
+    }, {
+        statusCode: number;
+        message?: string | undefined;
+    }>>;
 }, "strip", z.ZodTypeAny, {
     debug?: boolean | undefined;
     fallbackSlug?: string | undefined;
@@ -91,6 +101,10 @@ export declare const GatekeeperOptions: z.ZodObject<{
         timeout?: number | undefined;
     }[] | undefined;
     waitingRoom?: boolean | undefined;
+    testError?: {
+        statusCode: number;
+        message?: string | undefined;
+    } | undefined;
 }, {
     debug?: boolean | undefined;
     fallbackSlug?: string | undefined;
@@ -108,6 +122,10 @@ export declare const GatekeeperOptions: z.ZodObject<{
         timeout?: number | undefined;
     }[] | undefined;
     waitingRoom?: boolean | undefined;
+    testError?: {
+        statusCode: number;
+        message?: string | undefined;
+    } | undefined;
 }>;
 export declare const GatekeeperKeyPair: z.ZodObject<{
     publicKey: z.ZodString;
@@ -445,6 +463,19 @@ export declare const ValidateRequestObject: z.ZodObject<{
     liteValidatorRedirect: z.ZodOptional<z.ZodBoolean>;
     liteValidatorUrl: z.ZodOptional<z.ZodString>;
     domain: z.ZodOptional<z.ZodString>;
+    error: z.ZodOptional<z.ZodObject<{
+        message: z.ZodString;
+        statusCode: z.ZodOptional<z.ZodNumber>;
+        code: z.ZodOptional<z.ZodString>;
+    }, "strip", z.ZodTypeAny, {
+        message: string;
+        statusCode?: number | undefined;
+        code?: string | undefined;
+    }, {
+        message: string;
+        statusCode?: number | undefined;
+        code?: string | undefined;
+    }>>;
 }, "strip", z.ZodTypeAny, {
     promoted: boolean;
     stripParams: boolean;
@@ -462,6 +493,11 @@ export declare const ValidateRequestObject: z.ZodObject<{
     liteValidatorRedirect?: boolean | undefined;
     liteValidatorUrl?: string | undefined;
     domain?: string | undefined;
+    error?: {
+        message: string;
+        statusCode?: number | undefined;
+        code?: string | undefined;
+    } | undefined;
 }, {
     promoted: boolean;
     stripParams: boolean;
@@ -479,6 +515,11 @@ export declare const ValidateRequestObject: z.ZodObject<{
     liteValidatorRedirect?: boolean | undefined;
     liteValidatorUrl?: string | undefined;
     domain?: string | undefined;
+    error?: {
+        message: string;
+        statusCode?: number | undefined;
+        code?: string | undefined;
+    } | undefined;
 }>;
 export declare const HttpErrorWrapper: z.ZodObject<{
     result: z.ZodObject<{

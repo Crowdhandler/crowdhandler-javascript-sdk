@@ -64,6 +64,12 @@ module.exports.viewerRequest = async (event) => {
   //Validate the request
   let ch_status = await gatekeeper.validateRequest();
 
+  // Check for API errors
+  if (ch_status.error) {
+    console.error(`CrowdHandler API error ${ch_status.error.statusCode}: ${ch_status.error.message}`);
+    // Note: promoted status is still set based on error type and trustOnFail
+  }
+
   //If the request is not promoted, reject the request
   if (!ch_status.promoted) {
     return {
