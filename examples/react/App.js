@@ -24,6 +24,13 @@ function App() {
         //validate the request
         const chStatus = await gatekeeper.validateRequest();
 
+        // Check for API errors (network issues, server errors, etc.)
+        if (chStatus.error) {
+          console.error(`CrowdHandler error ${chStatus.error.statusCode}: ${chStatus.error.message}`);
+          // In a React app, you might want to show an error toast or notification
+          // Note: promoted is still set - 4xx = false, 5xx = based on trustOnFail
+        }
+
         //session management
         if (chStatus.setLocalStorage) {
           gatekeeper.setLocalStorage();

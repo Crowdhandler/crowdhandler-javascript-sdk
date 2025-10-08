@@ -23,6 +23,10 @@ export const GatekeeperOptions = z.object({
   liteValidator: z.boolean().optional(),
   roomsConfig: RoomsConfig.optional(), // Array of room configs
   waitingRoom: z.boolean().optional(),
+  testError: z.object({
+    statusCode: z.number(),
+    message: z.string().optional(),
+  }).optional(), // For testing error handling
 });
 
 export const GatekeeperKeyPair = z.object({
@@ -167,6 +171,11 @@ export const ValidateRequestObject = z.object({
   liteValidatorRedirect: z.boolean().optional(),
   liteValidatorUrl: z.string().optional(),
   domain: z.string().optional(),
+  error: z.object({
+    message: z.string(),
+    statusCode: z.number().optional(),
+    code: z.string().optional(),
+  }).optional(),
 });
 
 export const HttpErrorWrapper = z.object({

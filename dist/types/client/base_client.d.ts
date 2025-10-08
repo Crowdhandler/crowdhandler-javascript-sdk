@@ -13,6 +13,10 @@ export declare class BaseClient {
      * Wraps any error into a CrowdHandlerError
      */
     private wrapError;
+    /**
+     * Provides generic suggestion based on HTTP status code
+     */
+    private getGenericSuggestion;
     errorHandler(error: any): Promise<never>;
     httpDELETE(path: string, body: object): Promise<z.objectOutputType<{}, z.ZodAny, "strip"> | undefined>;
     httpGET(path?: string, params?: object): Promise<z.objectOutputType<{}, z.ZodAny, "strip"> | undefined>;

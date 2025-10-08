@@ -50,6 +50,11 @@ export interface InitConfig {
         }>;
         /** Whether this is a waiting room implementation (default: false) */
         waitingRoom?: boolean;
+        /** Test error simulation for integrator testing */
+        testError?: {
+            statusCode: number;
+            message?: string;
+        };
     };
 }
 /**

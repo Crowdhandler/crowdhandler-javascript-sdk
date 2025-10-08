@@ -64,6 +64,28 @@ export class BaseClient {
     );
   }
 
+  /**
+   * Provides generic suggestion based on HTTP status code
+   */
+  private getGenericSuggestion(status: number): string {
+    switch (status) {
+      case 400: return 'Check your request parameters';
+      case 401: return 'Check your authentication credentials';
+      case 403: return 'You do not have permission for this action';
+      case 404: return 'The requested resource was not found';
+      case 429: return 'Too many requests - please slow down';
+      case 500: 
+      case 502:
+      case 503:
+      case 504:
+        return 'Server error - please try again later';
+      default: 
+        return status >= 500 
+          ? 'This appears to be a server error. Please try again later or contact support@crowdhandler.com'
+          : 'Please check your request parameters and try again';
+    }
+  }
+
   async errorHandler(error: any): Promise<never> {
     // If it's already a CrowdHandlerError, just re-throw it
     if (error instanceof CrowdHandlerError) {
@@ -78,38 +100,38 @@ export class BaseClient {
       logger(this.debug, "error", `API Error - Status: ${status} - ${JSON.stringify(data)}`);
       logger(this.debug, "error", `Response headers: ${JSON.stringify(error.response.headers)}`);
 
-      // Handle specific HTTP status codes
-      if (status === 401) {
-        throw createError.invalidApiKey('public');
-      }
+      // Extract the error message from the API response
+      const errorMessage = data?.error || data?.message || `API request failed with status ${status}`;
       
+      // Special handling for rate limiting to include retry-after
       if (status === 429) {
         const retryAfter = error.response.headers['retry-after'];
-        throw createError.rateLimited(retryAfter);
+        throw new CrowdHandlerError(
+          ErrorCodes.RATE_LIMITED,
+          errorMessage,
+          retryAfter 
+            ? `Wait ${retryAfter} seconds before retrying`
+            : 'Reduce the frequency of API calls',
+          status,
+          {
+            url: error.config?.url,
+            method: error.config?.method,
+            apiResponse: data,
+            retryAfter
+          }
+        );
       }
       
-      if (status === 404) {
-        // Try to extract resource type from URL
-        const urlMatch = error.config?.url?.match(/\/v1\/(\w+)\/(\w+)/);
-        if (urlMatch) {
-          const [, resourceType, resourceId] = urlMatch;
-          throw createError.resourceNotFound(resourceType, resourceId);
-        }
-      }
-      
-      // Generic API error
-      const errorMessage = data?.error || data?.message || `API request failed with status ${status}`;
+      // Pass through the API error with full response data
       throw new CrowdHandlerError(
         ErrorCodes.API_INVALID_RESPONSE,
         errorMessage,
-        status >= 500 
-          ? 'This appears to be a server error. Please try again later or contact support@crowdhandler.com'
-          : 'Please check your request parameters and try again',
+        this.getGenericSuggestion(status),
         status,
         { 
           url: error.config?.url,
           method: error.config?.method,
-          responseData: JSON.stringify(data).substring(0, 200)
+          apiResponse: data  // Full API response, not truncated
         }
       );
       

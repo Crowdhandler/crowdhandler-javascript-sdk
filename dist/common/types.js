@@ -23,6 +23,10 @@ exports.GatekeeperOptions = zod_1.z.object({
     liteValidator: zod_1.z.boolean().optional(),
     roomsConfig: exports.RoomsConfig.optional(),
     waitingRoom: zod_1.z.boolean().optional(),
+    testError: zod_1.z.object({
+        statusCode: zod_1.z.number(),
+        message: zod_1.z.string().optional(),
+    }).optional(), // For testing error handling
 });
 exports.GatekeeperKeyPair = zod_1.z.object({
     publicKey: zod_1.z.string(),
@@ -146,6 +150,11 @@ exports.ValidateRequestObject = zod_1.z.object({
     liteValidatorRedirect: zod_1.z.boolean().optional(),
     liteValidatorUrl: zod_1.z.string().optional(),
     domain: zod_1.z.string().optional(),
+    error: zod_1.z.object({
+        message: zod_1.z.string(),
+        statusCode: zod_1.z.number().optional(),
+        code: zod_1.z.string().optional(),
+    }).optional(),
 });
 exports.HttpErrorWrapper = zod_1.z.object({
     result: zod_1.z.object({

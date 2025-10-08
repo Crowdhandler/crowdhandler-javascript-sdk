@@ -69,6 +69,12 @@ export interface InitConfig {
     
     /** Whether this is a waiting room implementation (default: false) */
     waitingRoom?: boolean;
+    
+    /** Test error simulation for integrator testing */
+    testError?: {
+      statusCode: number;
+      message?: string;
+    };
   };
 }
 
@@ -200,12 +206,13 @@ export function init(config: InitConfig): InitResult {
       mode,
       debug: config.options?.debug,
       timeout: config.options?.timeout,
-      trustOnFail: config.options?.trustOnFail,
+      ...(config.options?.trustOnFail !== undefined && { trustOnFail: config.options.trustOnFail }),
       fallbackSlug: config.options?.fallbackSlug,
       cookieName: config.options?.cookieName,
       liteValidator: config.options?.liteValidator,
       roomsConfig: config.options?.roomsConfig,
-      waitingRoom: config.options?.waitingRoom
+      waitingRoom: config.options?.waitingRoom,
+      testError: config.options?.testError
     };
     
     // Create gatekeeper using the public client from our unified client

@@ -91,10 +91,31 @@ var BaseClient = /** @class */ (function () {
             stack: error.stack
         });
     };
+    /**
+     * Provides generic suggestion based on HTTP status code
+     */
+    BaseClient.prototype.getGenericSuggestion = function (status) {
+        switch (status) {
+            case 400: return 'Check your request parameters';
+            case 401: return 'Check your authentication credentials';
+            case 403: return 'You do not have permission for this action';
+            case 404: return 'The requested resource was not found';
+            case 429: return 'Too many requests - please slow down';
+            case 500:
+            case 502:
+            case 503:
+            case 504:
+                return 'Server error - please try again later';
+            default:
+                return status >= 500
+                    ? 'This appears to be a server error. Please try again later or contact support@crowdhandler.com'
+                    : 'Please check your request parameters and try again';
+        }
+    };
     BaseClient.prototype.errorHandler = function (error) {
         var _a, _b, _c, _d;
         return __awaiter(this, void 0, void 0, function () {
-            var status_1, data, retryAfter, urlMatch, resourceType, resourceId, errorMessage;
+            var status_1, data, errorMessage, retryAfter;
             return __generator(this, function (_e) {
                 // If it's already a CrowdHandlerError, just re-throw it
                 if (error instanceof errors_1.CrowdHandlerError) {
@@ -105,28 +126,24 @@ var BaseClient = /** @class */ (function () {
                     data = error.response.data;
                     (0, logger_1.logger)(this.debug, "error", "API Error - Status: ".concat(status_1, " - ").concat(JSON.stringify(data)));
                     (0, logger_1.logger)(this.debug, "error", "Response headers: ".concat(JSON.stringify(error.response.headers)));
-                    // Handle specific HTTP status codes
-                    if (status_1 === 401) {
-                        throw errors_1.createError.invalidApiKey('public');
-                    }
+                    errorMessage = (data === null || data === void 0 ? void 0 : data.error) || (data === null || data === void 0 ? void 0 : data.message) || "API request failed with status ".concat(status_1);
+                    // Special handling for rate limiting to include retry-after
                     if (status_1 === 429) {
                         retryAfter = error.response.headers['retry-after'];
-                        throw errors_1.createError.rateLimited(retryAfter);
+                        throw new errors_1.CrowdHandlerError(errors_1.ErrorCodes.RATE_LIMITED, errorMessage, retryAfter
+                            ? "Wait ".concat(retryAfter, " seconds before retrying")
+                            : 'Reduce the frequency of API calls', status_1, {
+                            url: (_a = error.config) === null || _a === void 0 ? void 0 : _a.url,
+                            method: (_b = error.config) === null || _b === void 0 ? void 0 : _b.method,
+                            apiResponse: data,
+                            retryAfter: retryAfter
+                        });
                     }
-                    if (status_1 === 404) {
-                        urlMatch = (_b = (_a = error.config) === null || _a === void 0 ? void 0 : _a.url) === null || _b === void 0 ? void 0 : _b.match(/\/v1\/(\w+)\/(\w+)/);
-                        if (urlMatch) {
-                            resourceType = urlMatch[1], resourceId = urlMatch[2];
-                            throw errors_1.createError.resourceNotFound(resourceType, resourceId);
-                        }
-                    }
-                    errorMessage = (data === null || data === void 0 ? void 0 : data.error) || (data === null || data === void 0 ? void 0 : data.message) || "API request failed with status ".concat(status_1);
-                    throw new errors_1.CrowdHandlerError(errors_1.ErrorCodes.API_INVALID_RESPONSE, errorMessage, status_1 >= 500
-                        ? 'This appears to be a server error. Please try again later or contact support@crowdhandler.com'
-                        : 'Please check your request parameters and try again', status_1, {
+                    // Pass through the API error with full response data
+                    throw new errors_1.CrowdHandlerError(errors_1.ErrorCodes.API_INVALID_RESPONSE, errorMessage, this.getGenericSuggestion(status_1), status_1, {
                         url: (_c = error.config) === null || _c === void 0 ? void 0 : _c.url,
                         method: (_d = error.config) === null || _d === void 0 ? void 0 : _d.method,
-                        responseData: JSON.stringify(data).substring(0, 200)
+                        apiResponse: data // Full API response, not truncated
                     });
                 }
                 else if (error.request) {

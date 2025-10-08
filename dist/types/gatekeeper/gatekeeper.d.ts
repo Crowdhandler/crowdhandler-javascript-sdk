@@ -303,6 +303,10 @@ export declare class Gatekeeper {
      * - `hash` {string | null} - Signature hash for validation (when available)
      * - `liteValidatorRedirect` {boolean} - Whether to redirect for lite validation
      * - `liteValidatorUrl` {string} - URL for lite validator redirect
+     * - `error` {object | undefined} - Error information if validation encountered an issue:
+     *   - `message` {string} - The error message from the API
+     *   - `statusCode` {number | undefined} - HTTP status code (e.g., 401, 500)
+     *   - `code` {string | undefined} - Error code for programmatic handling
      *
      * @example
      * const result = await gatekeeper.validateRequest();
@@ -320,7 +324,17 @@ export declare class Gatekeeper {
      *   }
      * });
      *
-     * @throws {CrowdHandlerError} When API connection fails (check error.code === 'API_CONNECTION_FAILED')
+     * @example
+     * // Handling errors in the result
+     * const result = await gatekeeper.validateRequest();
+     * if (result.error) {
+     *   console.error(`API Error ${result.error.statusCode}: ${result.error.message}`);
+     *   // Note: promoted is still set based on error type
+     *   // 4xx errors: promoted = false
+     *   // 5xx errors: promoted based on trustOnFail setting
+     * }
+     *
+     * @throws {CrowdHandlerError} When SDK configuration fails or network errors occur
      */
     validateRequest(params?: {
         custom?: Record<string, any>;
@@ -341,6 +355,11 @@ export declare class Gatekeeper {
         liteValidatorRedirect?: boolean | undefined;
         liteValidatorUrl?: string | undefined;
         domain?: string | undefined;
+        error?: {
+            message: string;
+            statusCode?: number | undefined;
+            code?: string | undefined;
+        } | undefined;
     } | undefined>;
     /**
      * Validate request in a client-side mode.

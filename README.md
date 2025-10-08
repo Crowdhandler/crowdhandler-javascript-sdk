@@ -61,6 +61,13 @@ const { client, gatekeeper } = crowdhandler.init({
 // Validate the request
 const result = await gatekeeper.validateRequest();
 
+// Check for errors first
+if (result.error) {
+  console.error(`Validation error: ${result.error.message}`);
+  // 4xx errors: promoted = false (always block access)
+  // 5xx errors: promoted depends on trustOnFail setting
+}
+
 // Handle the validation result
 if (result.setCookie) {
   gatekeeper.setCookie(result.cookieValue, result.domain);
@@ -192,12 +199,10 @@ try {
   const result = await gatekeeper.validateRequest();
   // ... handle result ...
 } catch (error) {
-  if (error.code === 'API_CONNECTION_FAILED') {
-    // Handle based on trustOnFail setting
-    // true = allow access, false = use fallback room
-  }
+  console.error('Validation failed:', error.message);
+  console.error('Status code:', error.statusCode);
+  // Handle based on trustOnFail setting
 }
-```
 
 ### gatekeeper.setCookie(value, domain?)
 
@@ -418,27 +423,46 @@ Full API documentation with request/response examples is available in your [Crow
 
 ## Error Handling
 
-All SDK errors are instances of `CrowdHandlerError` with helpful context:
+All SDK errors are instances of `CrowdHandlerError` with consistent structure:
 
 ```javascript
 try {
   const rooms = await client.rooms().get();
 } catch (error) {
-  console.error(error.code);       // 'ROOM_NOT_FOUND'
-  console.error(error.message);    // Human-readable message
-  console.error(error.suggestion); // Helpful next steps
-  console.error(error.statusCode); // HTTP status code
+  console.error(error.message);    // The actual API error message
+  console.error(error.statusCode); // HTTP status code (e.g., 401, 404)
+  console.error(error.suggestion); // Helpful guidance for resolution
+  console.error(error.code);       // Error code for programmatic handling
 }
 ```
 
-### Error Codes
+### API Error Transparency
+
+The SDK preserves the exact error messages from the CrowdHandler API, allowing you to handle specific error scenarios:
+
+```javascript
+try {
+  const result = await gatekeeper.validateRequest({
+    custom: { code: 'user-code' }
+  });
+} catch (error) {
+  // Check the specific error message from the API
+  if (error.message.includes('Invalid priority code')) {
+    // Handle invalid access code
+  }
+  
+  // For advanced debugging, access the full API response
+  const apiResponse = error.context?.apiResponse;
+}
+```
+
+### Common Error Codes
 
 - `INVALID_CONFIG` - Invalid SDK configuration
 - `MISSING_PRIVATE_KEY` - Private key required for this operation
 - `API_CONNECTION_FAILED` - Cannot reach CrowdHandler API
-- `RESOURCE_NOT_FOUND` - Requested resource doesn't exist
-- `RATE_LIMITED` - Too many requests
-- Plus more specific error codes
+- `API_INVALID_RESPONSE` - API returned an error
+- `RATE_LIMITED` - Too many requests (includes retry-after)
 
 ## Integration Examples
 
@@ -468,6 +492,13 @@ async function protectRoute(req, res, next) {
 
     const result = await gatekeeper.validateRequest();
     
+    // Check if there was an error during validation
+    if (result.error) {
+      console.error(`API Error ${result.error.statusCode}: ${result.error.message}`);
+      // 4xx errors (e.g., invalid key, bad request): promoted = false (user blocked)
+      // 5xx errors (e.g., server error): promoted based on trustOnFail setting
+    }
+    
     if (result.setCookie) {
       gatekeeper.setCookie(result.cookieValue, result.domain);
     }
@@ -484,8 +515,10 @@ async function protectRoute(req, res, next) {
     res.locals.gatekeeper = gatekeeper;
     next();
   } catch (error) {
-    console.error('CrowdHandler error:', error);
-    // Decide whether to block or allow on error
+    // This catches unexpected errors (e.g., network issues, config errors)
+    console.error('CrowdHandler SDK error:', error.message);
+    // trustOnFail: true (default) = allow access on error
+    // trustOnFail: false = block access on error
     next();
   }
 }
@@ -606,6 +639,36 @@ await gatekeeper.recordPerformance({
   overrideElapsed: 1234  // Custom timing in ms
 });
 ```
+
+### Test Error Simulation
+
+For testing your error handling without making real API calls, you can simulate errors:
+
+```javascript
+const { gatekeeper } = init({
+  publicKey: 'YOUR_PUBLIC_KEY',
+  request: req,
+  response: res,
+  options: {
+    testError: {
+      statusCode: 500,  // Simulate a 500 error
+      message: 'Simulated server error for testing'
+    }
+  }
+});
+
+// This will return immediately with a simulated error
+const result = await gatekeeper.validateRequest();
+// result.error will contain the test error
+// result.promoted will be true (with default trustOnFail: true)
+```
+
+This is useful for:
+- Testing error handling logic in development
+- Verifying fallback behavior for different error types
+- Integration testing without affecting production metrics
+
+Note: 4xx test errors will always set `promoted: false`, while 5xx test errors respect your `trustOnFail` setting.
 
 ### Lite Validator Mode
 
