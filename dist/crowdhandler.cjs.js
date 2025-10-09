@@ -1,5 +1,5 @@
 /**
- * CrowdHandler JavaScript SDK v2.3.0
+ * CrowdHandler JavaScript SDK v2.3.1
  * (c) 2025 CrowdHandler
  * @license ISC
  */
@@ -2743,6 +2743,14 @@ var Gatekeeper = /** @class */ (function () {
                     case 3:
                         error_1 = _c.sent();
                         logger(this.options.debug, "error", "Session GET call failed with error: ".concat(error_1));
+                        // Set sessionStatus to error wrapper so error handling logic can process it
+                        this.sessionStatus = {
+                            result: {
+                                status: error_1.statusCode || 500,
+                                promoted: null,
+                                error: error_1.message || 'Unknown error occurred'
+                            }
+                        };
                         return [3 /*break*/, 4];
                     case 4: return [3 /*break*/, 9];
                     case 5:
@@ -2758,6 +2766,14 @@ var Gatekeeper = /** @class */ (function () {
                     case 8:
                         error_2 = _c.sent();
                         logger(this.options.debug, "error", "Session POST call failed with error: ".concat(error_2));
+                        // Set sessionStatus to error wrapper so error handling logic can process it
+                        this.sessionStatus = {
+                            result: {
+                                status: error_2.statusCode || 500,
+                                promoted: null,
+                                error: error_2.message || 'Unknown error occurred'
+                            }
+                        };
                         return [3 /*break*/, 9];
                     case 9: return [2 /*return*/];
                 }

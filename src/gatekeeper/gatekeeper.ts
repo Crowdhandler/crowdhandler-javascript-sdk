@@ -224,12 +224,12 @@ export class Gatekeeper {
   public async getSessionStatus(customParams?: Record<string, any>): Promise<void> {
     // Build request config conditionally
     const requestConfig: z.infer<typeof SessionRequestConfig> = {};
-    
+
     // Always include these if they exist
     if (this.agent) requestConfig.agent = this.agent;
     if (this.ip) requestConfig.ip = this.ip;
     if (this.lang) requestConfig.lang = this.lang;
-    
+
     // Include either slug OR url, but not both
     if (this.slug) {
       requestConfig.slug = this.slug;
@@ -264,6 +264,14 @@ export class Gatekeeper {
           "error",
           `Session GET call failed with error: ${error}`
         );
+        // Set sessionStatus to error wrapper so error handling logic can process it
+        this.sessionStatus = {
+          result: {
+            status: error.statusCode || 500,
+            promoted: null,
+            error: error.message || 'Unknown error occurred'
+          }
+        };
       }
     } else {
       logger(
@@ -281,6 +289,14 @@ export class Gatekeeper {
           "error",
           `Session POST call failed with error: ${error}`
         );
+        // Set sessionStatus to error wrapper so error handling logic can process it
+        this.sessionStatus = {
+          result: {
+            status: error.statusCode || 500,
+            promoted: null,
+            error: error.message || 'Unknown error occurred'
+          }
+        };
       }
     }
   }
