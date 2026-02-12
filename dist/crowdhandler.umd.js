@@ -1,6 +1,6 @@
 /**
  * CrowdHandler JavaScript SDK v2.3.1
- * (c) 2025 CrowdHandler
+ * (c) 2026 CrowdHandler
  * @license ISC
  */
 (function (global, factory) {
@@ -10756,23 +10756,6 @@
 	            }
 	            // Decode once to get the actual URL
 	            var decodedURL = decodeURIComponent(destinationUrl);
-	            // Parse URL to handle parameters properly
-	            var urlParts = decodedURL.split('?');
-	            var baseUrl = urlParts[0];
-	            var queryString = urlParts[1] || '';
-	            // Parse existing parameters while preserving their values
-	            var existingParams = [];
-	            if (queryString) {
-	                var params = queryString.split('&');
-	                for (var _i = 0, params_1 = params; _i < params_1.length; _i++) {
-	                    var param = params_1[_i];
-	                    var key = param.split('=')[0];
-	                    // Skip CrowdHandler parameters
-	                    if (!['ch-id', 'ch-id-signature', 'ch-requested', 'ch-code', 'ch-fresh'].includes(key)) {
-	                        existingParams.push(param);
-	                    }
-	                }
-	            }
 	            // Build new CrowdHandler parameters
 	            var chParams = [
 	                "ch-id=".concat(encodeURIComponent(this.token || '')),
@@ -10781,9 +10764,30 @@
 	                "ch-code=".concat(encodeURIComponent(this.specialParameters.chCode || '')),
 	                "ch-fresh=true"
 	            ];
-	            // Construct final URL
+	            // Separate hash fragment before parsing query params. This ensures
+	            // ch-* params are placed in the real query string (window.location.search)
+	            // rather than inside the hash fragment where host-domain scripts cannot
+	            // read them via URLSearchParams.
+	            var hashIndex = decodedURL.indexOf('#');
+	            var urlWithoutHash = hashIndex !== -1 ? decodedURL.substring(0, hashIndex) : decodedURL;
+	            var hashPart = hashIndex !== -1 ? decodedURL.substring(hashIndex) : '';
+	            // Parse existing query string, stripping any existing ch-* params
+	            var _g = urlWithoutHash.split('?'), baseUrl = _g[0], queryParts = _g.slice(1);
+	            var queryString = queryParts.join('?');
+	            var existingParams = [];
+	            if (queryString) {
+	                var params = queryString.split('&');
+	                for (var _i = 0, params_1 = params; _i < params_1.length; _i++) {
+	                    var param = params_1[_i];
+	                    var key = param.split('=')[0];
+	                    if (!['ch-id', 'ch-id-signature', 'ch-requested', 'ch-code', 'ch-fresh'].includes(key)) {
+	                        existingParams.push(param);
+	                    }
+	                }
+	            }
+	            // Construct final URL with ch-* params before any hash fragment
 	            var allParams = existingParams.concat(chParams);
-	            var finalUrl = baseUrl + (allParams.length > 0 ? '?' + allParams.join('&') : '');
+	            var finalUrl = baseUrl + (allParams.length > 0 ? '?' + allParams.join('&') : '') + hashPart;
 	            logger(this.options.debug, "info", "[WaitingRoom] Redirecting promoted user to: ".concat(finalUrl));
 	            return this.REQUEST.redirect(finalUrl);
 	        }

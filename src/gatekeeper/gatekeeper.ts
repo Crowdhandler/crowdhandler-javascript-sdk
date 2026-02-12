@@ -685,24 +685,6 @@ export class Gatekeeper {
       // Decode once to get the actual URL
       const decodedURL = decodeURIComponent(destinationUrl);
 
-      // Parse URL to handle parameters properly
-      const urlParts = decodedURL.split('?');
-      const baseUrl = urlParts[0];
-      const queryString = urlParts[1] || '';
-
-      // Parse existing parameters while preserving their values
-      const existingParams: string[] = [];
-      if (queryString) {
-        const params = queryString.split('&');
-        for (const param of params) {
-          const [key] = param.split('=');
-          // Skip CrowdHandler parameters
-          if (!['ch-id', 'ch-id-signature', 'ch-requested', 'ch-code', 'ch-fresh'].includes(key)) {
-            existingParams.push(param);
-          }
-        }
-      }
-
       // Build new CrowdHandler parameters
       const chParams = [
         `ch-id=${encodeURIComponent(this.token || '')}`,
@@ -712,9 +694,31 @@ export class Gatekeeper {
         `ch-fresh=true`
       ];
 
-      // Construct final URL
+      // Separate hash fragment before parsing query params. This ensures
+      // ch-* params are placed in the real query string (window.location.search)
+      // rather than inside the hash fragment where host-domain scripts cannot
+      // read them via URLSearchParams.
+      const hashIndex = decodedURL.indexOf('#');
+      const urlWithoutHash = hashIndex !== -1 ? decodedURL.substring(0, hashIndex) : decodedURL;
+      const hashPart = hashIndex !== -1 ? decodedURL.substring(hashIndex) : '';
+
+      // Parse existing query string, stripping any existing ch-* params
+      const [baseUrl, ...queryParts] = urlWithoutHash.split('?');
+      const queryString = queryParts.join('?');
+      const existingParams: string[] = [];
+      if (queryString) {
+        const params = queryString.split('&');
+        for (const param of params) {
+          const [key] = param.split('=');
+          if (!['ch-id', 'ch-id-signature', 'ch-requested', 'ch-code', 'ch-fresh'].includes(key)) {
+            existingParams.push(param);
+          }
+        }
+      }
+
+      // Construct final URL with ch-* params before any hash fragment
       const allParams = existingParams.concat(chParams);
-      const finalUrl = baseUrl + (allParams.length > 0 ? '?' + allParams.join('&') : '');
+      const finalUrl = baseUrl + (allParams.length > 0 ? '?' + allParams.join('&') : '') + hashPart;
       logger(
         this.options.debug,
         "info",
