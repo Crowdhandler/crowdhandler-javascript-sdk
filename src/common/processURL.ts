@@ -1,6 +1,6 @@
 import { z } from "zod";
 import qparse from "query-string";
-import { QueryObject, RequestObject, SpecialParametersObject } from "./types";
+import { QueryObject, RequestObject, SpecialParametersObject, CH_PARAM_KEYS } from "./types";
 import { logger } from "./logger";
 
 export class ProcessURL {
@@ -139,12 +139,9 @@ export class ProcessURL {
   ) {
     let processedQueryString: string | null | undefined;
     if (queryString) {
-      delete queryString["ch-code"];
-      delete queryString["ch-fresh"];
-      delete queryString["ch-id"];
-      delete queryString["ch-id-signature"];
-      delete queryString["ch-public-key"];
-      delete queryString["ch-requested"];
+      for (const key of CH_PARAM_KEYS) {
+        delete queryString[key];
+      }
     }
 
     //Convert to usable querystring format

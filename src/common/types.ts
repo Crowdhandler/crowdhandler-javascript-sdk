@@ -34,6 +34,17 @@ export const GatekeeperKeyPair = z.object({
   privateKey: z.string().optional(),
 });
 
+// Centralised list of CrowdHandler query-string parameter keys.
+// Used wherever ch-* params need to be detected or stripped.
+export const CH_PARAM_KEYS: readonly string[] = [
+  'ch-code',
+  'ch-fresh',
+  'ch-id',
+  'ch-id-signature',
+  'ch-public-key',
+  'ch-requested',
+];
+
 export const QueryObject = z
   .object({
     "ch-code": z.string().optional(),
