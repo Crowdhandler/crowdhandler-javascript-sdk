@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ProcessURL = void 0;
 var query_string_1 = __importDefault(require("query-string"));
+var types_1 = require("./types");
 var logger_1 = require("./logger");
 var ProcessURL = /** @class */ (function () {
     function ProcessURL(request, debug) {
@@ -102,12 +103,10 @@ var ProcessURL = /** @class */ (function () {
     ProcessURL.prototype.processQueryString = function (queryString) {
         var processedQueryString;
         if (queryString) {
-            delete queryString["ch-code"];
-            delete queryString["ch-fresh"];
-            delete queryString["ch-id"];
-            delete queryString["ch-id-signature"];
-            delete queryString["ch-public-key"];
-            delete queryString["ch-requested"];
+            for (var _i = 0, CH_PARAM_KEYS_1 = types_1.CH_PARAM_KEYS; _i < CH_PARAM_KEYS_1.length; _i++) {
+                var key = CH_PARAM_KEYS_1[_i];
+                delete queryString[key];
+            }
         }
         //Convert to usable querystring format
         if (queryString && Object.keys(queryString).length !== 0) {

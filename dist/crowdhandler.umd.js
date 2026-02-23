@@ -8471,6 +8471,16 @@
 	    publicKey: z.string(),
 	    privateKey: z.string().optional(),
 	});
+	// Centralised list of CrowdHandler query-string parameter keys.
+	// Used wherever ch-* params need to be detected or stripped.
+	var CH_PARAM_KEYS = [
+	    'ch-code',
+	    'ch-fresh',
+	    'ch-id',
+	    'ch-id-signature',
+	    'ch-public-key',
+	    'ch-requested',
+	];
 	z
 	    .object({
 	    "ch-code": z.string().optional(),
@@ -9444,12 +9454,10 @@
 	    ProcessURL.prototype.processQueryString = function (queryString) {
 	        var processedQueryString;
 	        if (queryString) {
-	            delete queryString["ch-code"];
-	            delete queryString["ch-fresh"];
-	            delete queryString["ch-id"];
-	            delete queryString["ch-id-signature"];
-	            delete queryString["ch-public-key"];
-	            delete queryString["ch-requested"];
+	            for (var _i = 0, CH_PARAM_KEYS_1 = CH_PARAM_KEYS; _i < CH_PARAM_KEYS_1.length; _i++) {
+	                var key = CH_PARAM_KEYS_1[_i];
+	                delete queryString[key];
+	            }
 	        }
 	        //Convert to usable querystring format
 	        if (queryString && Object.keys(queryString).length !== 0) {
@@ -10780,7 +10788,7 @@
 	                for (var _i = 0, params_1 = params; _i < params_1.length; _i++) {
 	                    var param = params_1[_i];
 	                    var key = param.split('=')[0];
-	                    if (!['ch-id', 'ch-id-signature', 'ch-requested', 'ch-code', 'ch-fresh'].includes(key)) {
+	                    if (!CH_PARAM_KEYS.includes(key)) {
 	                        existingParams.push(param);
 	                    }
 	                }

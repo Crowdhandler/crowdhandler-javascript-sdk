@@ -585,7 +585,7 @@ var Gatekeeper = /** @class */ (function () {
                 for (var _i = 0, params_1 = params; _i < params_1.length; _i++) {
                     var param = params_1[_i];
                     var key = param.split('=')[0];
-                    if (!['ch-id', 'ch-id-signature', 'ch-requested', 'ch-code', 'ch-fresh'].includes(key)) {
+                    if (!types_1.CH_PARAM_KEYS.includes(key)) {
                         existingParams.push(param);
                     }
                 }
