@@ -29,6 +29,7 @@ import {
   ProcessURLResultObject,
   RoomConfig,
   SessionRequestConfig,
+  CH_PARAM_KEYS,
 } from "../common/types";
 import { generateSignature } from "../common/hash";
 
@@ -710,7 +711,7 @@ export class Gatekeeper {
         const params = queryString.split('&');
         for (const param of params) {
           const [key] = param.split('=');
-          if (!['ch-id', 'ch-id-signature', 'ch-requested', 'ch-code', 'ch-fresh'].includes(key)) {
+          if (!CH_PARAM_KEYS.includes(key)) {
             existingParams.push(param);
           }
         }

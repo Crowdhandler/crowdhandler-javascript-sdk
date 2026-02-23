@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { RequestObject, SpecialParametersObject } from "./types";
+import { CH_PARAM_KEYS, RequestObject, SpecialParametersObject } from "./types";
 import { logger } from "./logger";
 
 export class ProcessURL {
@@ -130,21 +130,11 @@ export class ProcessURL {
   private removeChParams(queryString: string | undefined): string {
     if (!queryString) return "";
 
-    // List of ch-* parameters to remove
-    const chParams = [
-      "ch-code",
-      "ch-fresh",
-      "ch-id",
-      "ch-id-signature",
-      "ch-public-key",
-      "ch-requested",
-    ];
-
     // Split into individual params, filter out ch-* params, rejoin
     const params = queryString.split("&");
     const filteredParams = params.filter((param) => {
       const key = param.split("=")[0];
-      return !chParams.includes(key.toLowerCase());
+      return !CH_PARAM_KEYS.includes(key.toLowerCase());
     });
 
     return filteredParams.join("&");
