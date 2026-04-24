@@ -1,12 +1,11 @@
 import { z } from "zod";
-import qparse from "query-string";
-import { QueryObject, RequestObject, SpecialParametersObject } from "./types";
+import { RequestObject, SpecialParametersObject } from "./types";
 import { logger } from "./logger";
 
 export class ProcessURL {
   private host: string | undefined;
   private path: string | undefined;
-  private queryString: z.infer<typeof QueryObject> | undefined;
+  private rawQueryString: string | undefined;
   private specialParameters!: z.infer<typeof SpecialParametersObject>;
   private targetURL: string | undefined;
   debug: boolean;
@@ -42,90 +41,38 @@ export class ProcessURL {
       };
     }
 
-    //Extract query string from this.path
-    function extractQueryString(path: string) {
-      let queryString: string | undefined;
-      if (path.includes("?")) {
-        queryString = path.split("?")[1];
-      }
-      return queryString;
+    // Extract raw query string from path (preserving original encoding)
+    if (this.path.includes("?")) {
+      this.rawQueryString = this.path.split("?")[1];
     }
 
-    function formatQueryString(q: string) {
-      if (q) {
-        return qparse.parse(q, { sort: false });
-      }
-    }
+    // Extract ch-* parameter values using regex (decode for actual use)
+    const chCode = this.extractParamValue("ch-code");
+    const chID = this.extractParamValue("ch-id");
+    const chIDSignature = this.extractParamValue("ch-id-signature");
+    const chPublicKey = this.extractParamValue("ch-public-key");
+    const chRequested = this.extractParamValue("ch-requested");
 
-    let unprocessedQueryString: string | undefined;
-    unprocessedQueryString = extractQueryString(this.path);
+    // Set special parameters (with validation)
+    this.specialParameters.chCode = this.sanitizeParam(chCode);
+    this.specialParameters.chID = this.sanitizeParam(chID);
+    this.specialParameters.chIDSignature = this.sanitizeParam(chIDSignature);
+    this.specialParameters.chPublicKey = this.sanitizeParam(chPublicKey);
+    this.specialParameters.chRequested = this.sanitizeParam(chRequested);
 
-    if (unprocessedQueryString) {
-      this.queryString = formatQueryString(unprocessedQueryString);
-    }
+    // Remove ch-* params from query string while preserving everything else
+    const processedQueryString = this.removeChParams(this.rawQueryString);
 
-    //Destructure special params from query string if they are present
-    let {
-      "ch-code": chCode,
-      "ch-id": chID,
-      "ch-id-signature": chIDSignature,
-      "ch-public-key": chPublicKey,
-      "ch-requested": chRequested,
-    } = this.queryString || {};
+    // Extract path without query string
+    const cleanPath = this.path.split("?")[0];
 
-    //Override chCode value if the current one is unusable
-    if (!chCode || chCode === "undefined" || chCode === "null") {
-      chCode = "";
-    }
-
-    this.specialParameters.chCode = chCode;
-
-    //Override chID value if the current one is unusable
-    if (!chID || chID === "undefined" || chID === "null") {
-      chID = "";
-    }
-
-    this.specialParameters.chID = chID;
-
-    //Override chIDSignature value if the current one is unusable
-    if (
-      !chIDSignature ||
-      chIDSignature === "undefined" ||
-      chIDSignature === "null"
-    ) {
-      chIDSignature = "";
-    }
-
-    this.specialParameters.chIDSignature = chIDSignature;
-
-    //Override chPublicKey value if the current one is unusable
-    if (!chPublicKey || chPublicKey === "undefined" || chPublicKey === "null") {
-      chPublicKey = "";
-    }
-
-    this.specialParameters.chPublicKey = chPublicKey;
-
-    //Override chRequested value if the current one is unusable
-    if (!chRequested || chRequested === "undefined" || chRequested === "null") {
-      chRequested = "";
-    }
-
-    this.specialParameters.chRequested = chRequested;
-
-    // Process the query string
-    let processedQueryString = this.processQueryString(this.queryString);
-    //URL encode the targetURL to be used later in redirects
-    let targetURL;
-
-    //We no longer need the query string in the path
-    this.path = this.path.split("?")[0];
-
+    // Construct targetURL
     if (processedQueryString) {
       this.targetURL = encodeURIComponent(
-        `https://${this.host}${this.path}?${processedQueryString}`
+        `https://${this.host}${cleanPath}?${processedQueryString}`
       );
     } else {
-      this.targetURL = encodeURIComponent(`https://${this.host}${this.path}`);
+      this.targetURL = encodeURIComponent(`https://${this.host}${cleanPath}`);
     }
 
     return {
@@ -134,26 +81,61 @@ export class ProcessURL {
     };
   }
 
-  private processQueryString(
-    queryString: z.infer<typeof QueryObject> | undefined
-  ) {
-    let processedQueryString: string | null | undefined;
-    if (queryString) {
-      delete queryString["ch-code"];
-      delete queryString["ch-fresh"];
-      delete queryString["ch-id"];
-      delete queryString["ch-id-signature"];
-      delete queryString["ch-public-key"];
-      delete queryString["ch-requested"];
-    }
+  /**
+   * Extract a parameter value from the raw query string using regex.
+   * Decodes the value for actual use.
+   */
+  private extractParamValue(paramName: string): string {
+    if (!this.rawQueryString) return "";
 
-    //Convert to usable querystring format
-    if (queryString && Object.keys(queryString).length !== 0) {
-      processedQueryString = qparse.stringify(queryString, { sort: false });
-    } else {
-      processedQueryString = "";
-    }
+    // Match the parameter in the query string
+    const regex = new RegExp(`(?:^|&)${paramName}=([^&]*)`, "i");
+    const match = this.rawQueryString.match(regex);
 
-    return processedQueryString;
+    if (match && match[1]) {
+      try {
+        return decodeURIComponent(match[1]);
+      } catch {
+        return match[1];
+      }
+    }
+    return "";
+  }
+
+  /**
+   * Sanitize a parameter value - return empty string for unusable values.
+   */
+  private sanitizeParam(value: string): string {
+    if (!value || value === "undefined" || value === "null") {
+      return "";
+    }
+    return value;
+  }
+
+  /**
+   * Remove ch-* parameters from the query string while preserving
+   * the original encoding of all other parameters.
+   */
+  private removeChParams(queryString: string | undefined): string {
+    if (!queryString) return "";
+
+    // List of ch-* parameters to remove
+    const chParams = [
+      "ch-code",
+      "ch-fresh",
+      "ch-id",
+      "ch-id-signature",
+      "ch-public-key",
+      "ch-requested",
+    ];
+
+    // Split into individual params, filter out ch-* params, rejoin
+    const params = queryString.split("&");
+    const filteredParams = params.filter((param) => {
+      const key = param.split("=")[0];
+      return !chParams.includes(key.toLowerCase());
+    });
+
+    return filteredParams.join("&");
   }
 }

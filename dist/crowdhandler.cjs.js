@@ -1,6 +1,6 @@
 /**
  * CrowdHandler JavaScript SDK v2.3.1
- * (c) 2025 CrowdHandler
+ * (c) 2026 CrowdHandler
  * @license ISC
  */
 'use strict';
@@ -9,13 +9,11 @@ Object.defineProperty(exports, '__esModule', { value: true });
 
 var axios = require('axios');
 var zod = require('zod');
-var qparse = require('query-string');
 var jsSha256 = require('js-sha256');
 
 function _interopDefaultLegacy (e) { return e && typeof e === 'object' && 'default' in e ? e : { 'default': e }; }
 
 var axios__default = /*#__PURE__*/_interopDefaultLegacy(axios);
-var qparse__default = /*#__PURE__*/_interopDefaultLegacy(qparse);
 
 var runtime = {exports: {}};
 
@@ -1976,16 +1974,6 @@ zod.z.object({
     publicKey: zod.z.string(),
     privateKey: zod.z.string().optional(),
 });
-zod.z
-    .object({
-    "ch-code": zod.z.string().optional(),
-    "ch-id": zod.z.string().optional(),
-    "ch-id-signature": zod.z.string().optional(),
-    "ch-public-key": zod.z.string().optional(),
-    "ch-requested": zod.z.string().optional(),
-    "ch-token": zod.z.string().optional(),
-})
-    .catchall(zod.z.any());
 var SpecialParametersObject = zod.z.object({
     chCode: zod.z.string(),
     chID: zod.z.string(),
@@ -2221,86 +2209,90 @@ var ProcessURL = /** @class */ (function () {
                 specialParameters: this.specialParameters,
             };
         }
-        //Extract query string from this.path
-        function extractQueryString(path) {
-            var queryString;
-            if (path.includes("?")) {
-                queryString = path.split("?")[1];
-            }
-            return queryString;
+        // Extract raw query string from path (preserving original encoding)
+        if (this.path.includes("?")) {
+            this.rawQueryString = this.path.split("?")[1];
         }
-        function formatQueryString(q) {
-            if (q) {
-                return qparse__default["default"].parse(q, { sort: false });
-            }
-        }
-        var unprocessedQueryString;
-        unprocessedQueryString = extractQueryString(this.path);
-        if (unprocessedQueryString) {
-            this.queryString = formatQueryString(unprocessedQueryString);
-        }
-        //Destructure special params from query string if they are present
-        var _a = this.queryString || {}, chCode = _a["ch-code"], chID = _a["ch-id"], chIDSignature = _a["ch-id-signature"], chPublicKey = _a["ch-public-key"], chRequested = _a["ch-requested"];
-        //Override chCode value if the current one is unusable
-        if (!chCode || chCode === "undefined" || chCode === "null") {
-            chCode = "";
-        }
-        this.specialParameters.chCode = chCode;
-        //Override chID value if the current one is unusable
-        if (!chID || chID === "undefined" || chID === "null") {
-            chID = "";
-        }
-        this.specialParameters.chID = chID;
-        //Override chIDSignature value if the current one is unusable
-        if (!chIDSignature ||
-            chIDSignature === "undefined" ||
-            chIDSignature === "null") {
-            chIDSignature = "";
-        }
-        this.specialParameters.chIDSignature = chIDSignature;
-        //Override chPublicKey value if the current one is unusable
-        if (!chPublicKey || chPublicKey === "undefined" || chPublicKey === "null") {
-            chPublicKey = "";
-        }
-        this.specialParameters.chPublicKey = chPublicKey;
-        //Override chRequested value if the current one is unusable
-        if (!chRequested || chRequested === "undefined" || chRequested === "null") {
-            chRequested = "";
-        }
-        this.specialParameters.chRequested = chRequested;
-        // Process the query string
-        var processedQueryString = this.processQueryString(this.queryString);
-        //We no longer need the query string in the path
-        this.path = this.path.split("?")[0];
+        // Extract ch-* parameter values using regex (decode for actual use)
+        var chCode = this.extractParamValue("ch-code");
+        var chID = this.extractParamValue("ch-id");
+        var chIDSignature = this.extractParamValue("ch-id-signature");
+        var chPublicKey = this.extractParamValue("ch-public-key");
+        var chRequested = this.extractParamValue("ch-requested");
+        // Set special parameters (with validation)
+        this.specialParameters.chCode = this.sanitizeParam(chCode);
+        this.specialParameters.chID = this.sanitizeParam(chID);
+        this.specialParameters.chIDSignature = this.sanitizeParam(chIDSignature);
+        this.specialParameters.chPublicKey = this.sanitizeParam(chPublicKey);
+        this.specialParameters.chRequested = this.sanitizeParam(chRequested);
+        // Remove ch-* params from query string while preserving everything else
+        var processedQueryString = this.removeChParams(this.rawQueryString);
+        // Extract path without query string
+        var cleanPath = this.path.split("?")[0];
+        // Construct targetURL
         if (processedQueryString) {
-            this.targetURL = encodeURIComponent("https://".concat(this.host).concat(this.path, "?").concat(processedQueryString));
+            this.targetURL = encodeURIComponent("https://".concat(this.host).concat(cleanPath, "?").concat(processedQueryString));
         }
         else {
-            this.targetURL = encodeURIComponent("https://".concat(this.host).concat(this.path));
+            this.targetURL = encodeURIComponent("https://".concat(this.host).concat(cleanPath));
         }
         return {
             targetURL: this.targetURL,
             specialParameters: this.specialParameters,
         };
     };
-    ProcessURL.prototype.processQueryString = function (queryString) {
-        var processedQueryString;
-        if (queryString) {
-            delete queryString["ch-code"];
-            delete queryString["ch-fresh"];
-            delete queryString["ch-id"];
-            delete queryString["ch-id-signature"];
-            delete queryString["ch-public-key"];
-            delete queryString["ch-requested"];
+    /**
+     * Extract a parameter value from the raw query string using regex.
+     * Decodes the value for actual use.
+     */
+    ProcessURL.prototype.extractParamValue = function (paramName) {
+        if (!this.rawQueryString)
+            return "";
+        // Match the parameter in the query string
+        var regex = new RegExp("(?:^|&)".concat(paramName, "=([^&]*)"), "i");
+        var match = this.rawQueryString.match(regex);
+        if (match && match[1]) {
+            try {
+                return decodeURIComponent(match[1]);
+            }
+            catch (_a) {
+                return match[1];
+            }
         }
-        //Convert to usable querystring format
-        if (queryString && Object.keys(queryString).length !== 0) {
-            processedQueryString = qparse__default["default"].stringify(queryString, { sort: false });
+        return "";
+    };
+    /**
+     * Sanitize a parameter value - return empty string for unusable values.
+     */
+    ProcessURL.prototype.sanitizeParam = function (value) {
+        if (!value || value === "undefined" || value === "null") {
+            return "";
         }
-        else {
-            processedQueryString = "";
-        }
-        return processedQueryString;
+        return value;
+    };
+    /**
+     * Remove ch-* parameters from the query string while preserving
+     * the original encoding of all other parameters.
+     */
+    ProcessURL.prototype.removeChParams = function (queryString) {
+        if (!queryString)
+            return "";
+        // List of ch-* parameters to remove
+        var chParams = [
+            "ch-code",
+            "ch-fresh",
+            "ch-id",
+            "ch-id-signature",
+            "ch-public-key",
+            "ch-requested",
+        ];
+        // Split into individual params, filter out ch-* params, rejoin
+        var params = queryString.split("&");
+        var filteredParams = params.filter(function (param) {
+            var key = param.split("=")[0];
+            return !chParams.includes(key.toLowerCase());
+        });
+        return filteredParams.join("&");
     };
     return ProcessURL;
 }());
