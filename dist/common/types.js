@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.Modes = exports.RecordPerformanceOptions = exports.SessionStatusWrapper = exports.HttpErrorWrapper = exports.ValidateRequestObject = exports.ValidateRequestParams = exports.TokenObjectConstructor = exports.TokenObject = exports.ExtractTokenOptions = exports.SignatureSourceObject = exports.SignatureResponseObject = exports.SignatureObject = exports.RoomMetaObject = exports.LocalStorageOptions = exports.LocalStorageObject = exports.CookieObject = exports.RequestObject = exports.ProcessURLResultObject = exports.SessionRequestConfig = exports.SpecialParametersObject = exports.QueryObject = exports.GatekeeperKeyPair = exports.GatekeeperOptions = exports.RoomsConfig = exports.RoomConfig = void 0;
+exports.Modes = exports.RecordPerformanceOptions = exports.SessionStatusWrapper = exports.HttpErrorWrapper = exports.ValidateRequestObject = exports.ValidateRequestParams = exports.TokenObjectConstructor = exports.TokenObject = exports.ExtractTokenOptions = exports.SignatureSourceObject = exports.SignatureResponseObject = exports.SignatureObject = exports.RoomMetaObject = exports.LocalStorageOptions = exports.LocalStorageObject = exports.CookieObject = exports.RequestObject = exports.ProcessURLResultObject = exports.SessionRequestConfig = exports.SpecialParametersObject = exports.GatekeeperKeyPair = exports.GatekeeperOptions = exports.RoomsConfig = exports.RoomConfig = void 0;
 var zod_1 = require("zod");
 // Lite Validator types
 exports.RoomConfig = zod_1.z.object({
@@ -32,16 +32,6 @@ exports.GatekeeperKeyPair = zod_1.z.object({
     publicKey: zod_1.z.string(),
     privateKey: zod_1.z.string().optional(),
 });
-exports.QueryObject = zod_1.z
-    .object({
-    "ch-code": zod_1.z.string().optional(),
-    "ch-id": zod_1.z.string().optional(),
-    "ch-id-signature": zod_1.z.string().optional(),
-    "ch-public-key": zod_1.z.string().optional(),
-    "ch-requested": zod_1.z.string().optional(),
-    "ch-token": zod_1.z.string().optional(),
-})
-    .catchall(zod_1.z.any());
 exports.SpecialParametersObject = zod_1.z.object({
     chCode: zod_1.z.string(),
     chID: zod_1.z.string(),
