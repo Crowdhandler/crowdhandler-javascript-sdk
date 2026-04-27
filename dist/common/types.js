@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.Modes = exports.RecordPerformanceOptions = exports.SessionStatusWrapper = exports.HttpErrorWrapper = exports.ValidateRequestObject = exports.ValidateRequestParams = exports.TokenObjectConstructor = exports.TokenObject = exports.ExtractTokenOptions = exports.SignatureSourceObject = exports.SignatureResponseObject = exports.SignatureObject = exports.RoomMetaObject = exports.LocalStorageOptions = exports.LocalStorageObject = exports.CookieObject = exports.RequestObject = exports.ProcessURLResultObject = exports.SessionRequestConfig = exports.SpecialParametersObject = exports.GatekeeperKeyPair = exports.GatekeeperOptions = exports.RoomsConfig = exports.RoomConfig = void 0;
+exports.Modes = exports.RecordPerformanceOptions = exports.SessionStatusWrapper = exports.HttpErrorWrapper = exports.ValidateRequestObject = exports.ValidateRequestParams = exports.TokenObjectConstructor = exports.TokenObject = exports.ExtractTokenOptions = exports.SignatureSourceObject = exports.SignatureResponseObject = exports.SignatureObject = exports.RoomMetaObject = exports.LocalStorageOptions = exports.LocalStorageObject = exports.CookieObject = exports.RequestObject = exports.ProcessURLResultObject = exports.SessionRequestConfig = exports.SpecialParametersObject = exports.CH_PARAM_KEYS = exports.GatekeeperKeyPair = exports.GatekeeperOptions = exports.RoomsConfig = exports.RoomConfig = void 0;
 var zod_1 = require("zod");
 // Lite Validator types
 exports.RoomConfig = zod_1.z.object({
@@ -32,6 +32,16 @@ exports.GatekeeperKeyPair = zod_1.z.object({
     publicKey: zod_1.z.string(),
     privateKey: zod_1.z.string().optional(),
 });
+// Centralised list of CrowdHandler query-string parameter keys.
+// Used wherever ch-* params need to be detected or stripped.
+exports.CH_PARAM_KEYS = [
+    'ch-code',
+    'ch-fresh',
+    'ch-id',
+    'ch-id-signature',
+    'ch-public-key',
+    'ch-requested',
+];
 exports.SpecialParametersObject = zod_1.z.object({
     chCode: zod_1.z.string(),
     chID: zod_1.z.string(),

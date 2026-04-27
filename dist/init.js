@@ -32,7 +32,8 @@ function init(config) {
     // Check if context was provided
     var hasContext = !!((config.request && config.response) ||
         config.lambdaEdgeEvent ||
-        (typeof window !== 'undefined' && !config.request && !config.response && !config.lambdaEdgeEvent));
+        config.cloudflareWorkersRequest ||
+        (typeof window !== 'undefined' && !config.request && !config.response && !config.lambdaEdgeEvent && !config.cloudflareWorkersRequest));
     // Create gatekeeper if context provided
     var gatekeeper;
     if (hasContext) {
@@ -40,6 +41,9 @@ function init(config) {
         var context = void 0;
         if (config.lambdaEdgeEvent) {
             context = new requestContext_1.RequestContext({ lambdaEvent: config.lambdaEdgeEvent });
+        }
+        else if (config.cloudflareWorkersRequest) {
+            context = new requestContext_1.RequestContext({ cloudflareWorkersRequest: config.cloudflareWorkersRequest });
         }
         else if (config.request && config.response) {
             context = new requestContext_1.RequestContext({ request: config.request, response: config.response });
@@ -51,6 +55,7 @@ function init(config) {
             throw new errors_1.CrowdHandlerError(errors_1.ErrorCodes.INVALID_CONTEXT, 'Invalid context configuration', 'Provide either:\n' +
                 '- { request, response } for Express/Node.js\n' +
                 '- { lambdaEdgeEvent } for Lambda@Edge\n' +
+                '- { cloudflareWorkersRequest } for Cloudflare Workers\n' +
                 '- Nothing for browser environment');
         }
         // Auto-detect mode

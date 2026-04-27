@@ -10,6 +10,13 @@ export declare class BaseClient {
         apiUrl?: string;
     });
     /**
+     * Issue an HTTP request. Routes through axios in Node/Lambda environments
+     * and native fetch in Cloudflare Workers. Both paths return / throw
+     * axios-compatible shapes so errorHandler() and the response.data parsing
+     * downstream work unchanged.
+     */
+    private httpRequest;
+    /**
      * Wraps any error into a CrowdHandlerError
      */
     private wrapError;

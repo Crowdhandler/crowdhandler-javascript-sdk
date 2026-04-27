@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ProcessURL = void 0;
+var types_1 = require("./types");
 var logger_1 = require("./logger");
 var ProcessURL = /** @class */ (function () {
     function ProcessURL(request, debug) {
@@ -110,20 +111,11 @@ var ProcessURL = /** @class */ (function () {
     ProcessURL.prototype.removeChParams = function (queryString) {
         if (!queryString)
             return "";
-        // List of ch-* parameters to remove
-        var chParams = [
-            "ch-code",
-            "ch-fresh",
-            "ch-id",
-            "ch-id-signature",
-            "ch-public-key",
-            "ch-requested",
-        ];
         // Split into individual params, filter out ch-* params, rejoin
         var params = queryString.split("&");
         var filteredParams = params.filter(function (param) {
             var key = param.split("=")[0];
-            return !chParams.includes(key.toLowerCase());
+            return !types_1.CH_PARAM_KEYS.includes(key.toLowerCase());
         });
         return filteredParams.join("&");
     };

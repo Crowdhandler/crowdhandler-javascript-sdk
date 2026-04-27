@@ -1,5 +1,5 @@
 /**
- * CrowdHandler JavaScript SDK v2.3.1
+ * CrowdHandler JavaScript SDK v2.4.0
  * (c) 2026 CrowdHandler
  * @license ISC
  */
@@ -7536,6 +7536,18 @@
 	    }
 	};
 
+	/**
+	 * Detect if we're running in the Cloudflare Workers (workerd) runtime.
+	 * Workers sets navigator.userAgent to "Cloudflare-Workers" — this is the
+	 * documented and stable detection signal:
+	 * https://developers.cloudflare.com/workers/runtime-apis/web-standards/
+	 *
+	 * axios 0.27.2 has no fetch adapter and requires Node's http module, so it
+	 * crashes inside Workers. When we detect Workers, route HTTP through native
+	 * fetch instead — preserved error shape so errorHandler keeps working.
+	 */
+	var isCloudflareWorkers = typeof navigator !== "undefined" &&
+	    navigator.userAgent === "Cloudflare-Workers";
 	var APIResponse = z.object({}).catchall(z.any());
 	z
 	    .object({
@@ -7551,8 +7563,119 @@
 	        this.apiUrl = options.apiUrl || apiUrl;
 	        this.key = key;
 	        this.timeout = options.timeout || 5000;
-	        axios.defaults.timeout = this.timeout;
+	        if (!isCloudflareWorkers) {
+	            // axios.defaults is process-global state and is meaningless in Workers
+	            // (we don't use axios there). Skip in Workers to avoid touching axios's
+	            // internal config which can drag in Node-only deps during import.
+	            axios.defaults.timeout = this.timeout;
+	        }
 	    }
+	    /**
+	     * Issue an HTTP request. Routes through axios in Node/Lambda environments
+	     * and native fetch in Cloudflare Workers. Both paths return / throw
+	     * axios-compatible shapes so errorHandler() and the response.data parsing
+	     * downstream work unchanged.
+	     */
+	    BaseClient.prototype.httpRequest = function (method, url, options) {
+	        if (options === void 0) { options = {}; }
+	        return __awaiter(this, void 0, void 0, function () {
+	            var response_1, finalUrl, search, _i, _a, _b, k, v, init, hasContentType, controller, timeoutId, response, err_1, wrapped, contentType, data, text, headersObj_1, wrapped, headersObj;
+	            return __generator(this, function (_d) {
+	                switch (_d.label) {
+	                    case 0:
+	                        if (!!isCloudflareWorkers) return [3 /*break*/, 2];
+	                        return [4 /*yield*/, axios.request({
+	                                method: method,
+	                                url: url,
+	                                params: options.params,
+	                                data: options.body,
+	                                headers: options.headers,
+	                            })];
+	                    case 1:
+	                        response_1 = _d.sent();
+	                        return [2 /*return*/, { data: response_1.data, status: response_1.status, headers: response_1.headers }];
+	                    case 2:
+	                        finalUrl = url;
+	                        if (options.params && Object.keys(options.params).length > 0) {
+	                            search = new URLSearchParams();
+	                            for (_i = 0, _a = Object.entries(options.params); _i < _a.length; _i++) {
+	                                _b = _a[_i], k = _b[0], v = _b[1];
+	                                if (v !== undefined && v !== null)
+	                                    search.append(k, String(v));
+	                            }
+	                            finalUrl += (finalUrl.includes("?") ? "&" : "?") + search.toString();
+	                        }
+	                        init = {
+	                            method: method,
+	                            headers: options.headers,
+	                        };
+	                        if (options.body !== undefined && method !== "GET" && method !== "DELETE") {
+	                            init.body = typeof options.body === "string" ? options.body : JSON.stringify(options.body);
+	                            hasContentType = options.headers && Object.keys(options.headers)
+	                                .some(function (h) { return h.toLowerCase() === "content-type"; });
+	                            if (!hasContentType) {
+	                                init.headers = __assign(__assign({}, (options.headers || {})), { "content-type": "application/json" });
+	                            }
+	                        }
+	                        controller = new AbortController();
+	                        timeoutId = setTimeout(function () { return controller.abort(); }, this.timeout);
+	                        init.signal = controller.signal;
+	                        _d.label = 3;
+	                    case 3:
+	                        _d.trys.push([3, 5, , 6]);
+	                        return [4 /*yield*/, fetch(finalUrl, init)];
+	                    case 4:
+	                        response = _d.sent();
+	                        return [3 /*break*/, 6];
+	                    case 5:
+	                        err_1 = _d.sent();
+	                        clearTimeout(timeoutId);
+	                        wrapped = new Error((err_1 === null || err_1 === void 0 ? void 0 : err_1.message) || "Network request failed");
+	                        wrapped.request = { url: finalUrl, method: method };
+	                        wrapped.config = { url: finalUrl, method: method };
+	                        throw wrapped;
+	                    case 6:
+	                        clearTimeout(timeoutId);
+	                        contentType = response.headers.get("content-type") || "";
+	                        if (!contentType.includes("application/json")) return [3 /*break*/, 11];
+	                        _d.label = 7;
+	                    case 7:
+	                        _d.trys.push([7, 9, , 10]);
+	                        return [4 /*yield*/, response.json()];
+	                    case 8:
+	                        data = _d.sent();
+	                        return [3 /*break*/, 10];
+	                    case 9:
+	                        _d.sent();
+	                        data = null;
+	                        return [3 /*break*/, 10];
+	                    case 10: return [3 /*break*/, 13];
+	                    case 11: return [4 /*yield*/, response.text()];
+	                    case 12:
+	                        text = _d.sent();
+	                        try {
+	                            data = JSON.parse(text);
+	                        }
+	                        catch (_e) {
+	                            data = text;
+	                        }
+	                        _d.label = 13;
+	                    case 13:
+	                        if (response.status < 200 || response.status >= 300) {
+	                            headersObj_1 = {};
+	                            response.headers.forEach(function (v, k) { headersObj_1[k] = v; });
+	                            wrapped = new Error("Request failed with status ".concat(response.status));
+	                            wrapped.response = { status: response.status, data: data, headers: headersObj_1 };
+	                            wrapped.config = { url: finalUrl, method: method };
+	                            throw wrapped;
+	                        }
+	                        headersObj = {};
+	                        response.headers.forEach(function (v, k) { headersObj[k] = v; });
+	                        return [2 /*return*/, { data: data, status: response.status, headers: headersObj }];
+	                }
+	            });
+	        });
+	    };
 	    /**
 	     * Wraps any error into a CrowdHandlerError
 	     */
@@ -7648,7 +7771,7 @@
 	                switch (_a.label) {
 	                    case 0:
 	                        _a.trys.push([0, 2, , 4]);
-	                        return [4 /*yield*/, axios.delete(this.apiUrl + path, {
+	                        return [4 /*yield*/, this.httpRequest("DELETE", this.apiUrl + path, {
 	                                headers: {
 	                                    "x-api-key": this.key,
 	                                },
@@ -7680,7 +7803,7 @@
 	                switch (_a.label) {
 	                    case 0:
 	                        _a.trys.push([0, 2, , 4]);
-	                        return [4 /*yield*/, axios.get(this.apiUrl + path, {
+	                        return [4 /*yield*/, this.httpRequest("GET", this.apiUrl + path, {
 	                                params: params,
 	                                headers: {
 	                                    "x-api-key": this.key,
@@ -7714,7 +7837,8 @@
 	                switch (_a.label) {
 	                    case 0:
 	                        _a.trys.push([0, 2, , 4]);
-	                        return [4 /*yield*/, axios.post(this.apiUrl + path, body, {
+	                        return [4 /*yield*/, this.httpRequest("POST", this.apiUrl + path, {
+	                                body: body,
 	                                headers: __assign({ "x-api-key": this.key }, headers),
 	                            })];
 	                    case 1:
@@ -7744,7 +7868,8 @@
 	                switch (_a.label) {
 	                    case 0:
 	                        _a.trys.push([0, 2, , 3]);
-	                        return [4 /*yield*/, axios.put(this.apiUrl + path, body, {
+	                        return [4 /*yield*/, this.httpRequest("PUT", this.apiUrl + path, {
+	                                body: body,
 	                                headers: {
 	                                    "x-api-key": this.key,
 	                                },
@@ -8204,6 +8329,78 @@
 	    return BrowserHandler;
 	}());
 
+	/**
+	 * Handler for Cloudflare Workers (workerd) runtime.
+	 *
+	 * Mirrors the shape of LambdaRequestHandler — the Worker model is request-in /
+	 * response-out (no mutable response object), so:
+	 *   - read methods source from the Workers-native Request
+	 *   - redirect() returns a Workers Response (caller returns it from fetch)
+	 *   - setCookie() returns the Set-Cookie header value (caller appends it
+	 *     to the outgoing Response)
+	 *
+	 * Cookie format and no-cache redirect headers mirror the existing
+	 * crowdhandler-cloudflare-integration Worker so behaviour stays consistent
+	 * across both deployment styles.
+	 */
+	var CloudflareWorkersHandler = /** @class */ (function () {
+	    function CloudflareWorkersHandler(request) {
+	        this.request = request;
+	        this.url = new URL(request.url);
+	    }
+	    CloudflareWorkersHandler.prototype.getHeader = function (name) {
+	        return this.request.headers.get(name) || "";
+	    };
+	    CloudflareWorkersHandler.prototype.getCookies = function () {
+	        return this.request.headers.get("cookie") || "";
+	    };
+	    CloudflareWorkersHandler.prototype.getHost = function () {
+	        // URL.host includes port when non-standard — matches Host header
+	        // semantics used by the other handlers (Lambda/NodeJS/Browser).
+	        return this.url.host;
+	    };
+	    CloudflareWorkersHandler.prototype.getProtocol = function () {
+	        // URL.protocol includes the trailing ":" — strip it so the value matches
+	        // the other handlers (which return "https" / "http").
+	        return this.url.protocol.replace(/:$/, "");
+	    };
+	    CloudflareWorkersHandler.prototype.getPath = function () {
+	        return this.url.pathname + this.url.search;
+	    };
+	    CloudflareWorkersHandler.prototype.getAbsoluteUri = function () {
+	        return this.request.url;
+	    };
+	    CloudflareWorkersHandler.prototype.getUserHostAddress = function () {
+	        // CF-Connecting-IP is the canonical client IP header on Workers
+	        // (matches crowdhandler-cloudflare-integration/index.js).
+	        return this.request.headers.get("cf-connecting-ip") || "";
+	    };
+	    CloudflareWorkersHandler.prototype.setCookie = function (value, cookieName, domain) {
+	        if (cookieName === void 0) { cookieName = "crowdhandler"; }
+	        // Returns the Set-Cookie header value — caller appends it to their
+	        // outgoing Response. Format mirrors the existing CF integration.
+	        var parts = ["".concat(cookieName, "=").concat(value), "path=/", "Secure"];
+	        if (domain) {
+	            parts.push("domain=".concat(domain));
+	        }
+	        return parts.join("; ");
+	    };
+	    CloudflareWorkersHandler.prototype.redirect = function (url) {
+	        // Header casing and values mirror helpers.noCacheHeaders in
+	        // crowdhandler-cloudflare-integration/helpers/misc.js.
+	        return new Response(null, {
+	            status: 302,
+	            headers: {
+	                Location: url,
+	                "Cache-Control": "no-cache, no-store, must-revalidate",
+	                Expires: "Fri, 01 Jan 1970 00:00:00 GMT",
+	                Pragma: "no-cache",
+	            },
+	        });
+	    };
+	    return CloudflareWorkersHandler;
+	}());
+
 	var LambdaRequestHandler = /** @class */ (function () {
 	    function LambdaRequestHandler(event /*context: any, callback: any*/) {
 	        this.request = event;
@@ -8422,6 +8619,10 @@
 	                    var responseEvent = params.lambdaEvent;
 	                    return new LambdaResponseHandler(responseEvent.Records[0].cf.request, responseEvent.Records[0].cf.response);
 	            }
+	            //Cloudflare Workers Request
+	        }
+	        else if (params && params.cloudflareWorkersRequest) {
+	            return new CloudflareWorkersHandler(params.cloudflareWorkersRequest);
 	            //NodeJS HTTP request
 	        }
 	        else if (params && params.request && params.response) {
@@ -8471,6 +8672,16 @@
 	    publicKey: z.string(),
 	    privateKey: z.string().optional(),
 	});
+	// Centralised list of CrowdHandler query-string parameter keys.
+	// Used wherever ch-* params need to be detected or stripped.
+	var CH_PARAM_KEYS = [
+	    'ch-code',
+	    'ch-fresh',
+	    'ch-id',
+	    'ch-id-signature',
+	    'ch-public-key',
+	    'ch-requested',
+	];
 	var SpecialParametersObject = z.object({
 	    chCode: z.string(),
 	    chID: z.string(),
@@ -8785,20 +8996,11 @@
 	    ProcessURL.prototype.removeChParams = function (queryString) {
 	        if (!queryString)
 	            return "";
-	        // List of ch-* parameters to remove
-	        var chParams = [
-	            "ch-code",
-	            "ch-fresh",
-	            "ch-id",
-	            "ch-id-signature",
-	            "ch-public-key",
-	            "ch-requested",
-	        ];
 	        // Split into individual params, filter out ch-* params, rejoin
 	        var params = queryString.split("&");
 	        var filteredParams = params.filter(function (param) {
 	            var key = param.split("=")[0];
-	            return !chParams.includes(key.toLowerCase());
+	            return !CH_PARAM_KEYS.includes(key.toLowerCase());
 	        });
 	        return filteredParams.join("&");
 	    };
@@ -10098,23 +10300,6 @@
 	            }
 	            // Decode once to get the actual URL
 	            var decodedURL = decodeURIComponent(destinationUrl);
-	            // Parse URL to handle parameters properly
-	            var urlParts = decodedURL.split('?');
-	            var baseUrl = urlParts[0];
-	            var queryString = urlParts[1] || '';
-	            // Parse existing parameters while preserving their values
-	            var existingParams = [];
-	            if (queryString) {
-	                var params = queryString.split('&');
-	                for (var _i = 0, params_1 = params; _i < params_1.length; _i++) {
-	                    var param = params_1[_i];
-	                    var key = param.split('=')[0];
-	                    // Skip CrowdHandler parameters
-	                    if (!['ch-id', 'ch-id-signature', 'ch-requested', 'ch-code', 'ch-fresh'].includes(key)) {
-	                        existingParams.push(param);
-	                    }
-	                }
-	            }
 	            // Build new CrowdHandler parameters
 	            var chParams = [
 	                "ch-id=".concat(encodeURIComponent(this.token || '')),
@@ -10123,9 +10308,30 @@
 	                "ch-code=".concat(encodeURIComponent(this.specialParameters.chCode || '')),
 	                "ch-fresh=true"
 	            ];
-	            // Construct final URL
+	            // Separate hash fragment before parsing query params. This ensures
+	            // ch-* params are placed in the real query string (window.location.search)
+	            // rather than inside the hash fragment where host-domain scripts cannot
+	            // read them via URLSearchParams.
+	            var hashIndex = decodedURL.indexOf('#');
+	            var urlWithoutHash = hashIndex !== -1 ? decodedURL.substring(0, hashIndex) : decodedURL;
+	            var hashPart = hashIndex !== -1 ? decodedURL.substring(hashIndex) : '';
+	            // Parse existing query string, stripping any existing ch-* params
+	            var _g = urlWithoutHash.split('?'), baseUrl = _g[0], queryParts = _g.slice(1);
+	            var queryString = queryParts.join('?');
+	            var existingParams = [];
+	            if (queryString) {
+	                var params = queryString.split('&');
+	                for (var _i = 0, params_1 = params; _i < params_1.length; _i++) {
+	                    var param = params_1[_i];
+	                    var key = param.split('=')[0];
+	                    if (!CH_PARAM_KEYS.includes(key)) {
+	                        existingParams.push(param);
+	                    }
+	                }
+	            }
+	            // Construct final URL with ch-* params before any hash fragment
 	            var allParams = existingParams.concat(chParams);
-	            var finalUrl = baseUrl + (allParams.length > 0 ? '?' + allParams.join('&') : '');
+	            var finalUrl = baseUrl + (allParams.length > 0 ? '?' + allParams.join('&') : '') + hashPart;
 	            logger(this.options.debug, "info", "[WaitingRoom] Redirecting promoted user to: ".concat(finalUrl));
 	            return this.REQUEST.redirect(finalUrl);
 	        }
@@ -11381,7 +11587,8 @@
 	    // Check if context was provided
 	    var hasContext = !!((config.request && config.response) ||
 	        config.lambdaEdgeEvent ||
-	        (!config.request && !config.response && !config.lambdaEdgeEvent));
+	        config.cloudflareWorkersRequest ||
+	        (!config.request && !config.response && !config.lambdaEdgeEvent && !config.cloudflareWorkersRequest));
 	    // Create gatekeeper if context provided
 	    var gatekeeper;
 	    if (hasContext) {
@@ -11389,6 +11596,9 @@
 	        var context = void 0;
 	        if (config.lambdaEdgeEvent) {
 	            context = new RequestContext({ lambdaEvent: config.lambdaEdgeEvent });
+	        }
+	        else if (config.cloudflareWorkersRequest) {
+	            context = new RequestContext({ cloudflareWorkersRequest: config.cloudflareWorkersRequest });
 	        }
 	        else if (config.request && config.response) {
 	            context = new RequestContext({ request: config.request, response: config.response });

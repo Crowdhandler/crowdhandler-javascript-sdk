@@ -137,6 +137,7 @@ export declare const GatekeeperKeyPair: z.ZodObject<{
     publicKey: string;
     privateKey?: string | undefined;
 }>;
+export declare const CH_PARAM_KEYS: readonly string[];
 export declare const SpecialParametersObject: z.ZodObject<{
     chCode: z.ZodString;
     chID: z.ZodString;
