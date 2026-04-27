@@ -138,28 +138,6 @@ export declare const GatekeeperKeyPair: z.ZodObject<{
     privateKey?: string | undefined;
 }>;
 export declare const CH_PARAM_KEYS: readonly string[];
-export declare const QueryObject: z.ZodObject<{
-    "ch-code": z.ZodOptional<z.ZodString>;
-    "ch-id": z.ZodOptional<z.ZodString>;
-    "ch-id-signature": z.ZodOptional<z.ZodString>;
-    "ch-public-key": z.ZodOptional<z.ZodString>;
-    "ch-requested": z.ZodOptional<z.ZodString>;
-    "ch-token": z.ZodOptional<z.ZodString>;
-}, "strip", z.ZodAny, z.objectOutputType<{
-    "ch-code": z.ZodOptional<z.ZodString>;
-    "ch-id": z.ZodOptional<z.ZodString>;
-    "ch-id-signature": z.ZodOptional<z.ZodString>;
-    "ch-public-key": z.ZodOptional<z.ZodString>;
-    "ch-requested": z.ZodOptional<z.ZodString>;
-    "ch-token": z.ZodOptional<z.ZodString>;
-}, z.ZodAny, "strip">, z.objectInputType<{
-    "ch-code": z.ZodOptional<z.ZodString>;
-    "ch-id": z.ZodOptional<z.ZodString>;
-    "ch-id-signature": z.ZodOptional<z.ZodString>;
-    "ch-public-key": z.ZodOptional<z.ZodString>;
-    "ch-requested": z.ZodOptional<z.ZodString>;
-    "ch-token": z.ZodOptional<z.ZodString>;
-}, z.ZodAny, "strip">>;
 export declare const SpecialParametersObject: z.ZodObject<{
     chCode: z.ZodString;
     chID: z.ZodString;

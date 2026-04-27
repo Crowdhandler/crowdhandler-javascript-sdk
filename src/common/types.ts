@@ -45,17 +45,6 @@ export const CH_PARAM_KEYS: readonly string[] = [
   'ch-requested',
 ];
 
-export const QueryObject = z
-  .object({
-    "ch-code": z.string().optional(),
-    "ch-id": z.string().optional(),
-    "ch-id-signature": z.string().optional(),
-    "ch-public-key": z.string().optional(),
-    "ch-requested": z.string().optional(),
-    "ch-token": z.string().optional(),
-  })
-  .catchall(z.any());
-
 export const SpecialParametersObject = z.object({
   chCode: z.string(),
   chID: z.string(),
