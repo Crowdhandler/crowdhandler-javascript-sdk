@@ -3,6 +3,20 @@ import { z, ZodError } from "zod";
 import { logger } from "../common/logger";
 import { CrowdHandlerError, createError, ErrorCodes } from "../common/errors";
 
+/**
+ * Detect if we're running in the Cloudflare Workers (workerd) runtime.
+ * Workers sets navigator.userAgent to "Cloudflare-Workers" — this is the
+ * documented and stable detection signal:
+ * https://developers.cloudflare.com/workers/runtime-apis/web-standards/
+ *
+ * axios 0.27.2 has no fetch adapter and requires Node's http module, so it
+ * crashes inside Workers. When we detect Workers, route HTTP through native
+ * fetch instead — preserved error shape so errorHandler keeps working.
+ */
+const isCloudflareWorkers =
+  typeof navigator !== "undefined" &&
+  (navigator as any).userAgent === "Cloudflare-Workers";
+
 const APIResponse = z.object({}).catchall(z.any());
 
 const APIErrorResponse = z
@@ -28,7 +42,107 @@ export class BaseClient {
     this.apiUrl = options.apiUrl || apiUrl;
     this.key = key;
     this.timeout = options.timeout || 5000;
-    axios.defaults.timeout = this.timeout;
+    if (!isCloudflareWorkers) {
+      // axios.defaults is process-global state and is meaningless in Workers
+      // (we don't use axios there). Skip in Workers to avoid touching axios's
+      // internal config which can drag in Node-only deps during import.
+      axios.defaults.timeout = this.timeout;
+    }
+  }
+
+  /**
+   * Issue an HTTP request. Routes through axios in Node/Lambda environments
+   * and native fetch in Cloudflare Workers. Both paths return / throw
+   * axios-compatible shapes so errorHandler() and the response.data parsing
+   * downstream work unchanged.
+   */
+  private async httpRequest(
+    method: "GET" | "POST" | "PUT" | "DELETE",
+    url: string,
+    options: {
+      params?: Record<string, any>;
+      body?: any;
+      headers?: Record<string, string>;
+    } = {}
+  ): Promise<{ data: any; status: number; headers: any }> {
+    if (!isCloudflareWorkers) {
+      // Node/Lambda path — preserve existing axios behaviour exactly.
+      const response = await axios.request({
+        method,
+        url,
+        params: options.params,
+        data: options.body,
+        headers: options.headers,
+      });
+      return { data: response.data, status: response.status, headers: response.headers };
+    }
+
+    // Workers path — native fetch with a manual timeout via AbortController.
+    let finalUrl = url;
+    if (options.params && Object.keys(options.params).length > 0) {
+      const search = new URLSearchParams();
+      for (const [k, v] of Object.entries(options.params)) {
+        if (v !== undefined && v !== null) search.append(k, String(v));
+      }
+      finalUrl += (finalUrl.includes("?") ? "&" : "?") + search.toString();
+    }
+
+    const init: RequestInit = {
+      method,
+      headers: options.headers as any,
+    };
+
+    if (options.body !== undefined && method !== "GET" && method !== "DELETE") {
+      init.body = typeof options.body === "string" ? options.body : JSON.stringify(options.body);
+      const hasContentType = options.headers && Object.keys(options.headers)
+        .some((h) => h.toLowerCase() === "content-type");
+      if (!hasContentType) {
+        init.headers = { ...(options.headers || {}), "content-type": "application/json" };
+      }
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+    init.signal = controller.signal;
+
+    let response: Response;
+    try {
+      response = await fetch(finalUrl, init);
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      // Mirror axios's "no response received" error shape so errorHandler's
+      // `else if (error.request)` branch fires.
+      const wrapped: any = new Error(err?.message || "Network request failed");
+      wrapped.request = { url: finalUrl, method };
+      wrapped.config = { url: finalUrl, method };
+      throw wrapped;
+    }
+    clearTimeout(timeoutId);
+
+    // Read body — try JSON first, fall back to text.
+    const contentType = response.headers.get("content-type") || "";
+    let data: any;
+    if (contentType.includes("application/json")) {
+      try { data = await response.json(); } catch { data = null; }
+    } else {
+      const text = await response.text();
+      try { data = JSON.parse(text); } catch { data = text; }
+    }
+
+    if (response.status < 200 || response.status >= 300) {
+      // Mirror axios's error.response shape so errorHandler's
+      // `if (error.response)` branch fires unchanged.
+      const headersObj: Record<string, string> = {};
+      response.headers.forEach((v, k) => { headersObj[k] = v; });
+      const wrapped: any = new Error(`Request failed with status ${response.status}`);
+      wrapped.response = { status: response.status, data, headers: headersObj };
+      wrapped.config = { url: finalUrl, method };
+      throw wrapped;
+    }
+
+    const headersObj: Record<string, string> = {};
+    response.headers.forEach((v, k) => { headersObj[k] = v; });
+    return { data, status: response.status, headers: headersObj };
   }
 
   /**
@@ -152,7 +266,7 @@ export class BaseClient {
 
   async httpDELETE(path: string, body: object) {
     try {
-      const response = await axios.delete(this.apiUrl + path, {
+      const response = await this.httpRequest("DELETE", this.apiUrl + path, {
         headers: {
           "x-api-key": this.key,
         },
@@ -170,13 +284,13 @@ export class BaseClient {
 
   async httpGET(path?: string, params?: object) {
     try {
-      const response = await axios.get(this.apiUrl + path, {
-        params: params,
+      const response = await this.httpRequest("GET", this.apiUrl + path, {
+        params: params as Record<string, any>,
         headers: {
           "x-api-key": this.key,
         },
       });
-      
+
       try {
         return APIResponse.parse(response.data);
       } catch (parseError: any) {
@@ -194,13 +308,14 @@ export class BaseClient {
     schema: z.Schema = APIResponse
   ) {
     try {
-      const response = await axios.post(this.apiUrl + path, body, {
+      const response = await this.httpRequest("POST", this.apiUrl + path, {
+        body,
         headers: {
           "x-api-key": this.key,
           ...headers,
         },
       });
-      
+
       try {
         return schema.parse(response.data);
       } catch (parseError: any) {
@@ -213,7 +328,8 @@ export class BaseClient {
 
   async httpPUT(path: string, body: object) {
     try {
-      const response = await axios.put(this.apiUrl + path, body, {
+      const response = await this.httpRequest("PUT", this.apiUrl + path, {
+        body,
         headers: {
           "x-api-key": this.key,
         },

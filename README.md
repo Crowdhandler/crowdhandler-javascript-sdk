@@ -8,7 +8,7 @@ The official JavaScript SDK for [CrowdHandler](https://www.crowdhandler.com) wai
 ## Features
 
 - 🚀 **Easy Integration** - Add queue management to any JavaScript application with a single function call
-- 🌐 **Flexible Deployment** - Works in Node.js servers, browsers, serverless functions, and CDN edge locations
+- 🌐 **Flexible Deployment** - Works in Node.js servers, browsers, Lambda@Edge, Cloudflare Workers, and other edge runtimes
 - ⚡ **Performance Options** - Choose between real-time API validation or local signature validation based on your needs
 - 🔄 **Queue Continuity** - Maintains user position across page refreshes and sessions
 - 📘 **TypeScript Support** - Full type definitions for better development experience
@@ -29,7 +29,7 @@ npm install crowdhandler-sdk
 <script src="https://unpkg.com/crowdhandler-sdk/dist/crowdhandler.umd.min.js"></script>
 
 <!-- Or specify a version -->
-<script src="https://unpkg.com/crowdhandler-sdk@2.0.0/dist/crowdhandler.umd.min.js"></script>
+<script src="https://unpkg.com/crowdhandler-sdk@2.4.0/dist/crowdhandler.umd.min.js"></script>
 ```
 
 ### Module Formats
@@ -133,6 +133,45 @@ console.log('User granted access');
 
 // Record performance (optional but recommended)
 await gatekeeper.recordPerformance();
+```
+
+### Cloudflare Workers
+
+```javascript
+import { init } from 'crowdhandler-sdk';
+
+export default {
+  async fetch(request, env, ctx) {
+    const { gatekeeper } = init({
+      publicKey: env.CROWDHANDLER_PUBLIC_KEY,
+      cloudflareWorkersRequest: request
+    });
+
+    const result = await gatekeeper.validateRequest();
+
+    // Workers have no mutable response object — build the outgoing
+    // Response yourself using values from the result.
+    if (!result.promoted) {
+      return new Response(null, {
+        status: 302,
+        headers: { Location: result.targetURL }
+      });
+    }
+
+    const originResponse = await fetch(request);
+    const response = new Response(originResponse.body, originResponse);
+
+    if (result.setCookie) {
+      response.headers.append(
+        'set-cookie',
+        `crowdhandler=${result.cookieValue}; path=/; Secure`
+      );
+    }
+
+    ctx.waitUntil(gatekeeper.recordPerformance());
+    return response;
+  }
+};
 ```
 
 ## Core Methods
@@ -284,10 +323,11 @@ const instance = crowdhandler.init({
   privateKey: 'YOUR_PRIVATE_KEY',  // Required for private API methods
   
   // Request context (choose one based on your environment)
-  request: req,           // Express/Node.js request
-  response: res,          // Express/Node.js response
-  lambdaEdgeEvent: event, // Lambda@Edge event
-  // (none)               // Browser environment (auto-detected)
+  request: req,                       // Express/Node.js request
+  response: res,                      // Express/Node.js response
+  lambdaEdgeEvent: event,             // Lambda@Edge event
+  cloudflareWorkersRequest: request,  // Cloudflare Workers Request
+  // (none)                           // Browser environment (auto-detected)
   
   // Options
   options: {
@@ -565,6 +605,69 @@ exports.handler = async (event) => {
   return event.Records[0].cf.request;
 };
 ```
+
+### Cloudflare Workers
+
+The SDK ships with native support for the Cloudflare Workers (workerd) runtime — no Node polyfills required. Pass the Workers `Request` object via `cloudflareWorkersRequest` and the SDK uses native `fetch` internally for all API calls.
+
+```javascript
+import { init } from 'crowdhandler-sdk';
+
+export default {
+  async fetch(request, env, ctx) {
+    const { gatekeeper } = init({
+      publicKey: env.CROWDHANDLER_PUBLIC_KEY,
+      cloudflareWorkersRequest: request
+    });
+
+    const result = await gatekeeper.validateRequest();
+
+    if (result.error) {
+      console.error(`API Error ${result.error.statusCode}: ${result.error.message}`);
+    }
+
+    // Strip CrowdHandler params from a freshly promoted URL
+    if (result.stripParams) {
+      return new Response(null, {
+        status: 302,
+        headers: {
+          Location: decodeURIComponent(result.targetURL),
+          'Set-Cookie': `crowdhandler=${result.cookieValue}; path=/; Secure`
+        }
+      });
+    }
+
+    // Send unpromoted users to the waiting room
+    if (!result.promoted) {
+      return new Response(null, {
+        status: 302,
+        headers: { Location: result.targetURL }
+      });
+    }
+
+    // Promoted: fetch the origin and attach the session cookie if needed
+    const originResponse = await fetch(request);
+    const response = new Response(originResponse.body, originResponse);
+
+    if (result.setCookie) {
+      response.headers.append(
+        'set-cookie',
+        `crowdhandler=${result.cookieValue}; path=/; Secure`
+      );
+    }
+
+    // Performance recording continues after the response is returned
+    ctx.waitUntil(gatekeeper.recordPerformance());
+    return response;
+  }
+};
+```
+
+**Workers vs. Express/Lambda — what's different:**
+
+- Workers have no mutable response object. Build the outgoing `Response` yourself using values from `result` (`cookieValue`, `targetURL`, `setCookie`) rather than relying on helper methods that mutate a response in place.
+- Use `ctx.waitUntil()` for `recordPerformance()` so the metric call doesn't delay the user's response.
+- Default `mode: 'full'` (used above) only needs the public key. Hybrid mode is supported but requires shipping your private key as a Worker secret — only do this if you've assessed the trade-off.
 
 ### React / Next.js
 

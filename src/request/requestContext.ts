@@ -1,6 +1,7 @@
 import { CloudFrontRequestEvent, CloudFrontResponseEvent } from "aws-lambda";
 
 import { BrowserHandler } from "./browserHandler";
+import { CloudflareWorkersHandler } from "./cloudflareWorkersHandler";
 import { LambdaRequestHandler } from "./lambdaRequestHandler";
 import { LambdaResponseHandler } from "./lambdaResponseHandler";
 import { NodeJSHandler } from "./nodejsHandler";
@@ -9,6 +10,7 @@ interface RequestContextParams {
   lambdaEvent?: any;
   request?: any;
   response?: any;
+  cloudflareWorkersRequest?: any;
 }
 
 //Create a base class that will act as a switch depending on the environment
@@ -38,6 +40,9 @@ export class RequestContext {
           );
           break;
       }
+      //Cloudflare Workers Request
+    } else if (params && params.cloudflareWorkersRequest) {
+      return new CloudflareWorkersHandler(params.cloudflareWorkersRequest);
       //NodeJS HTTP request
     } else if (params && params.request && params.response) {
       return new NodeJSHandler(params.request, params.response);
