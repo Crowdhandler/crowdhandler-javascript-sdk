@@ -21,6 +21,14 @@ export declare class ProcessURL {
     /**
      * Extract a parameter value from the raw query string using regex.
      * Decodes the value for actual use.
+     *
+     * Treats `+` as a space before percent-decoding — this is the HTML
+     * form-encoding convention used by URLSearchParams and the legacy
+     * query-string library, and by every other CrowdHandler integration
+     * (Cloudflare Worker, CloudFront). `decodeURIComponent` alone does not
+     * do this. Keeping it consistent matters for signature validation: any
+     * divergence in how the SDK and the edge decode ch-* values produces
+     * mismatched signatures.
      */
     private extractParamValue;
     /**

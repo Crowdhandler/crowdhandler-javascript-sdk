@@ -84,6 +84,14 @@ export class ProcessURL {
   /**
    * Extract a parameter value from the raw query string using regex.
    * Decodes the value for actual use.
+   *
+   * Treats `+` as a space before percent-decoding — this is the HTML
+   * form-encoding convention used by URLSearchParams and the legacy
+   * query-string library, and by every other CrowdHandler integration
+   * (Cloudflare Worker, CloudFront). `decodeURIComponent` alone does not
+   * do this. Keeping it consistent matters for signature validation: any
+   * divergence in how the SDK and the edge decode ch-* values produces
+   * mismatched signatures.
    */
   private extractParamValue(paramName: string): string {
     if (!this.rawQueryString) return "";
@@ -93,10 +101,13 @@ export class ProcessURL {
     const match = this.rawQueryString.match(regex);
 
     if (match && match[1]) {
+      const normalized = match[1].replace(/\+/g, "%20");
       try {
-        return decodeURIComponent(match[1]);
+        return decodeURIComponent(normalized);
       } catch {
-        return match[1];
+        // Malformed percent-encoding. Still honour the `+` → space convention
+        // on the fallback path so output stays consistent with URLSearchParams.
+        return match[1].replace(/\+/g, " ");
       }
     }
     return "";
