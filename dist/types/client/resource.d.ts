@@ -10,5 +10,7 @@ export declare class Resource extends BaseClient {
     delete(id: string, body: object): Promise<import("zod").objectOutputType<{}, import("zod").ZodAny, "strip"> | undefined>;
     get(id?: string, params?: any): Promise<import("zod").objectOutputType<{}, import("zod").ZodAny, "strip"> | undefined>;
     post(body: any): Promise<any>;
-    put(id: string, body: object): Promise<import("zod").objectOutputType<{}, import("zod").ZodAny, "strip">>;
+    put(id: string, body: object, options?: {
+        timeout?: number;
+    }): Promise<import("zod").objectOutputType<{}, import("zod").ZodAny, "strip">>;
 }

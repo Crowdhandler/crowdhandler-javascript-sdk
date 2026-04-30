@@ -55,6 +55,11 @@ var axios_1 = __importDefault(require("axios"));
 var zod_1 = require("zod");
 var logger_1 = require("../common/logger");
 var errors_1 = require("../common/errors");
+var runtime_1 = require("../common/runtime");
+// axios 0.27.2 has no fetch adapter and requires Node's http module, so it
+// crashes inside Workers. When isCloudflareWorkers is true we route HTTP
+// through native fetch instead — preserved error shape so errorHandler keeps
+// working.
 var APIResponse = zod_1.z.object({}).catchall(zod_1.z.any());
 var APIErrorResponse = zod_1.z
     .object({
@@ -70,8 +75,125 @@ var BaseClient = /** @class */ (function () {
         this.apiUrl = options.apiUrl || apiUrl;
         this.key = key;
         this.timeout = options.timeout || 5000;
-        axios_1.default.defaults.timeout = this.timeout;
+        if (!runtime_1.isCloudflareWorkers) {
+            // axios.defaults is process-global state and is meaningless in Workers
+            // (we don't use axios there). Skip in Workers to avoid touching axios's
+            // internal config which can drag in Node-only deps during import.
+            axios_1.default.defaults.timeout = this.timeout;
+        }
     }
+    /**
+     * Issue an HTTP request. Routes through axios in Node/Lambda environments
+     * and native fetch in Cloudflare Workers. Both paths return / throw
+     * axios-compatible shapes so errorHandler() and the response.data parsing
+     * downstream work unchanged.
+     */
+    BaseClient.prototype.httpRequest = function (method, url, options) {
+        var _a;
+        if (options === void 0) { options = {}; }
+        return __awaiter(this, void 0, void 0, function () {
+            var requestTimeout, response_1, finalUrl, search, _i, _b, _c, k, v, init, hasContentType, controller, timeoutId, response, err_1, wrapped, contentType, data, _d, text, headersObj_1, wrapped, headersObj;
+            return __generator(this, function (_e) {
+                switch (_e.label) {
+                    case 0:
+                        requestTimeout = (_a = options.timeout) !== null && _a !== void 0 ? _a : this.timeout;
+                        if (!!runtime_1.isCloudflareWorkers) return [3 /*break*/, 2];
+                        return [4 /*yield*/, axios_1.default.request({
+                                method: method,
+                                url: url,
+                                params: options.params,
+                                data: options.body,
+                                headers: options.headers,
+                                timeout: requestTimeout,
+                            })];
+                    case 1:
+                        response_1 = _e.sent();
+                        return [2 /*return*/, { data: response_1.data, status: response_1.status, headers: response_1.headers }];
+                    case 2:
+                        finalUrl = url;
+                        if (options.params && Object.keys(options.params).length > 0) {
+                            search = new URLSearchParams();
+                            for (_i = 0, _b = Object.entries(options.params); _i < _b.length; _i++) {
+                                _c = _b[_i], k = _c[0], v = _c[1];
+                                if (v !== undefined && v !== null)
+                                    search.append(k, String(v));
+                            }
+                            finalUrl += (finalUrl.includes("?") ? "&" : "?") + search.toString();
+                        }
+                        init = {
+                            method: method,
+                            headers: options.headers,
+                        };
+                        if (options.body !== undefined && method !== "GET" && method !== "DELETE") {
+                            init.body = typeof options.body === "string" ? options.body : JSON.stringify(options.body);
+                            hasContentType = options.headers && Object.keys(options.headers)
+                                .some(function (h) { return h.toLowerCase() === "content-type"; });
+                            if (!hasContentType) {
+                                init.headers = __assign(__assign({}, (options.headers || {})), { "content-type": "application/json" });
+                            }
+                        }
+                        controller = new AbortController();
+                        timeoutId = setTimeout(function () { return controller.abort(); }, requestTimeout);
+                        init.signal = controller.signal;
+                        _e.label = 3;
+                    case 3:
+                        _e.trys.push([3, 5, , 6]);
+                        return [4 /*yield*/, fetch(finalUrl, init)];
+                    case 4:
+                        response = _e.sent();
+                        return [3 /*break*/, 6];
+                    case 5:
+                        err_1 = _e.sent();
+                        clearTimeout(timeoutId);
+                        wrapped = new Error((err_1 === null || err_1 === void 0 ? void 0 : err_1.message) || "Network request failed");
+                        if (controller.signal.aborted || (err_1 === null || err_1 === void 0 ? void 0 : err_1.name) === "AbortError") {
+                            wrapped.code = "ECONNABORTED";
+                        }
+                        wrapped.request = { url: finalUrl, method: method };
+                        wrapped.config = { url: finalUrl, method: method };
+                        throw wrapped;
+                    case 6:
+                        clearTimeout(timeoutId);
+                        contentType = response.headers.get("content-type") || "";
+                        if (!contentType.includes("application/json")) return [3 /*break*/, 11];
+                        _e.label = 7;
+                    case 7:
+                        _e.trys.push([7, 9, , 10]);
+                        return [4 /*yield*/, response.json()];
+                    case 8:
+                        data = _e.sent();
+                        return [3 /*break*/, 10];
+                    case 9:
+                        _d = _e.sent();
+                        data = null;
+                        return [3 /*break*/, 10];
+                    case 10: return [3 /*break*/, 13];
+                    case 11: return [4 /*yield*/, response.text()];
+                    case 12:
+                        text = _e.sent();
+                        try {
+                            data = JSON.parse(text);
+                        }
+                        catch (_f) {
+                            data = text;
+                        }
+                        _e.label = 13;
+                    case 13:
+                        if (response.status < 200 || response.status >= 300) {
+                            headersObj_1 = {};
+                            response.headers.forEach(function (v, k) { headersObj_1[k] = v; });
+                            wrapped = new Error("Request failed with status ".concat(response.status));
+                            wrapped.response = { status: response.status, data: data, headers: headersObj_1 };
+                            wrapped.config = { url: finalUrl, method: method };
+                            throw wrapped;
+                        }
+                        headersObj = {};
+                        response.headers.forEach(function (v, k) { headersObj[k] = v; });
+                        return [2 /*return*/, { data: data, status: response.status, headers: headersObj }];
+                }
+            });
+        });
+    };
     /**
      * Wraps any error into a CrowdHandlerError
      */
@@ -168,7 +290,7 @@ var BaseClient = /** @class */ (function () {
                 switch (_a.label) {
                     case 0:
                         _a.trys.push([0, 2, , 4]);
-                        return [4 /*yield*/, axios_1.default.delete(this.apiUrl + path, {
+                        return [4 /*yield*/, this.httpRequest("DELETE", this.apiUrl + path, {
                                 headers: {
                                     "x-api-key": this.key,
                                 },
@@ -200,7 +322,7 @@ var BaseClient = /** @class */ (function () {
                 switch (_a.label) {
                     case 0:
                         _a.trys.push([0, 2, , 4]);
-                        return [4 /*yield*/, axios_1.default.get(this.apiUrl + path, {
+                        return [4 /*yield*/, this.httpRequest("GET", this.apiUrl + path, {
                                 params: params,
                                 headers: {
                                     "x-api-key": this.key,
@@ -234,7 +356,8 @@ var BaseClient = /** @class */ (function () {
                 switch (_a.label) {
                     case 0:
                         _a.trys.push([0, 2, , 4]);
-                        return [4 /*yield*/, axios_1.default.post(this.apiUrl + path, body, {
+                        return [4 /*yield*/, this.httpRequest("POST", this.apiUrl + path, {
+                                body: body,
                                 headers: __assign({ "x-api-key": this.key }, headers),
                             })];
                     case 1:
@@ -257,17 +380,19 @@ var BaseClient = /** @class */ (function () {
             });
         });
     };
-    BaseClient.prototype.httpPUT = function (path, body) {
+    BaseClient.prototype.httpPUT = function (path, body, options) {
         return __awaiter(this, void 0, void 0, function () {
             var response, error_4;
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
                         _a.trys.push([0, 2, , 3]);
-                        return [4 /*yield*/, axios_1.default.put(this.apiUrl + path, body, {
+                        return [4 /*yield*/, this.httpRequest("PUT", this.apiUrl + path, {
+                                body: body,
                                 headers: {
                                     "x-api-key": this.key,
                                 },
+                                timeout: options === null || options === void 0 ? void 0 : options.timeout,
                             })];
                     case 1:
                         response = _a.sent();

@@ -8,6 +8,7 @@ import { getLang } from "../common/languageDiscover";
 import { getUserAgent } from "../common/userAgentDiscover";
 import { Timer } from "../common/timer";
 import { ignoredPatternsCheck } from "../common/ignoredPatternsCheck";
+import { isCloudflareWorkers } from "../common/runtime";
 import "../common/types";
 import { z } from "zod";
 import {
@@ -29,6 +30,7 @@ import {
   ProcessURLResultObject,
   RoomConfig,
   SessionRequestConfig,
+  CH_PARAM_KEYS,
 } from "../common/types";
 import { generateSignature } from "../common/hash";
 
@@ -685,24 +687,6 @@ export class Gatekeeper {
       // Decode once to get the actual URL
       const decodedURL = decodeURIComponent(destinationUrl);
 
-      // Parse URL to handle parameters properly
-      const urlParts = decodedURL.split('?');
-      const baseUrl = urlParts[0];
-      const queryString = urlParts[1] || '';
-
-      // Parse existing parameters while preserving their values
-      const existingParams: string[] = [];
-      if (queryString) {
-        const params = queryString.split('&');
-        for (const param of params) {
-          const [key] = param.split('=');
-          // Skip CrowdHandler parameters
-          if (!['ch-id', 'ch-id-signature', 'ch-requested', 'ch-code', 'ch-fresh'].includes(key)) {
-            existingParams.push(param);
-          }
-        }
-      }
-
       // Build new CrowdHandler parameters
       const chParams = [
         `ch-id=${encodeURIComponent(this.token || '')}`,
@@ -712,9 +696,31 @@ export class Gatekeeper {
         `ch-fresh=true`
       ];
 
-      // Construct final URL
+      // Separate hash fragment before parsing query params. This ensures
+      // ch-* params are placed in the real query string (window.location.search)
+      // rather than inside the hash fragment where host-domain scripts cannot
+      // read them via URLSearchParams.
+      const hashIndex = decodedURL.indexOf('#');
+      const urlWithoutHash = hashIndex !== -1 ? decodedURL.substring(0, hashIndex) : decodedURL;
+      const hashPart = hashIndex !== -1 ? decodedURL.substring(hashIndex) : '';
+
+      // Parse existing query string, stripping any existing ch-* params
+      const [baseUrl, ...queryParts] = urlWithoutHash.split('?');
+      const queryString = queryParts.join('?');
+      const existingParams: string[] = [];
+      if (queryString) {
+        const params = queryString.split('&');
+        for (const param of params) {
+          const [key] = param.split('=');
+          if (!CH_PARAM_KEYS.includes(key)) {
+            existingParams.push(param);
+          }
+        }
+      }
+
+      // Construct final URL with ch-* params before any hash fragment
       const allParams = existingParams.concat(chParams);
-      const finalUrl = baseUrl + (allParams.length > 0 ? '?' + allParams.join('&') : '');
+      const finalUrl = baseUrl + (allParams.length > 0 ? '?' + allParams.join('&') : '') + hashPart;
       logger(
         this.options.debug,
         "info",
@@ -956,14 +962,25 @@ export class Gatekeeper {
    * 
    * @param {string} value - The cookie value to set (from result.cookieValue)
    * @param {string} domain - Optional domain pattern to determine cookie domain scope
-   * @returns {boolean} True if the cookie was successfully set, false otherwise
+   * @returns {boolean | string} In Node.js/Lambda/browser environments returns true on success
+   *   or false on failure. In Cloudflare Workers returns the Set-Cookie header string that
+   *   must be applied to the outgoing Response by the caller.
    * 
    * @example
+   * // Node.js / Lambda
    * if (result.setCookie) {
    *   gatekeeper.setCookie(result.cookieValue, result.domain);
    * }
+   * 
+   * @example
+   * // Cloudflare Workers
+   * if (result.setCookie) {
+   *   const setCookieHeader = gatekeeper.setCookie(result.cookieValue, result.domain);
+   *   // setCookieHeader is the Set-Cookie header value — apply it to the Response:
+   *   // response.headers.append('Set-Cookie', setCookieHeader as string);
+   * }
    */
-  public setCookie(value: string, domain?: string): boolean {
+  public setCookie(value: string, domain?: string): boolean | string {
     try {
       // Determine cookie domain if domain pattern is provided
       let cookieDomain: string | undefined;
@@ -975,9 +992,12 @@ export class Gatekeeper {
         }
       }
       
-      // Set the cookie with the provided value and options
-      this.REQUEST.setCookie(value, this.STORAGE_NAME, cookieDomain);
-      return true;
+      // Set the cookie with the provided value and options.
+      // CloudflareWorkersHandler returns the Set-Cookie header string because
+      // Workers are response-out and the caller must apply the header manually.
+      // All other handlers set the cookie as a side-effect and return void.
+      const result = this.REQUEST.setCookie(value, this.STORAGE_NAME, cookieDomain);
+      return typeof result === 'string' ? result : true;
     } catch (error: any) {
       logger(this.options.debug, "error", error);
       return false;
@@ -1078,9 +1098,10 @@ export class Gatekeeper {
             sample: 0.2, // default sample rate
             overrideElapsed: undefined, // no elapsed time override
             responseID: undefined, // no responseID
+            timeout: undefined, // no per-call timeout override
           };
 
-      const { statusCode, sample, overrideElapsed, responseID } =
+      const { statusCode, sample, overrideElapsed, responseID, timeout } =
         validatedOptions;
 
       // Generate a random number for sampling
@@ -1095,11 +1116,27 @@ export class Gatekeeper {
       const elapsed =
         overrideElapsed !== undefined ? overrideElapsed : this.timer.elapsed();
 
-      // Asynchronously send the performance data to CrowdHandler, no need to await the promise
-      this.PublicClient.responses().put(currentResponseID, {
-        httpCode: statusCode,
-        time: elapsed,
-      });
+      // sampleRate tells the server how many real events each row represents,
+      // and bypasses the server's default 33% gating (which only kicks in when
+      // sampleRate is null). For sample=1 this is 1; for sample=0.2 this is 5.
+      const sampleRate = Math.max(1, Math.round(1 / sample));
+
+      // Default 1500ms — recordPerformance is fire-after-response observability,
+      // we don't want a slow API to hold the worker isolate longer than needed
+      // when called from inside ctx.waitUntil(). Caller can override via opts.
+      const putPromise = this.PublicClient.responses().put(
+        currentResponseID,
+        { httpCode: statusCode, sampleRate, time: elapsed },
+        { timeout: timeout ?? 1500 },
+      );
+
+      // Fire-and-forget on Node/Lambda/Browser (non-critical, no need to
+      // delay the caller). On Workers, await — ctx.waitUntil(recordPerformance(...))
+      // only extends the request lifetime until the awaited Promise chain
+      // resolves, so without this the runtime cancels the orphaned fetch.
+      if (isCloudflareWorkers) {
+        await putPromise;
+      }
     } catch (error: any) {
       logger(this.options.debug, "Error recording performance:", error);
     }

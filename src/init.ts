@@ -24,7 +24,10 @@ export interface InitConfig {
   
   /** AWS Lambda@Edge event object */
   lambdaEdgeEvent?: any;
-  
+
+  /** Cloudflare Workers Request object (workerd runtime) */
+  cloudflareWorkersRequest?: any;
+
   /** Additional configuration options */
   options?: {
     /** 
@@ -147,6 +150,7 @@ export type InitResult = InitResultWithoutGatekeeper | InitResultWithGatekeeper;
 // Function overloads for better type inference
 export function init(config: InitConfig & { request: any; response: any }): InitResultWithGatekeeper;
 export function init(config: InitConfig & { lambdaEdgeEvent: any }): InitResultWithGatekeeper;
+export function init(config: InitConfig & { cloudflareWorkersRequest: any }): InitResultWithGatekeeper;
 export function init(config: InitConfig): InitResult;
 
 // Implementation
@@ -169,9 +173,10 @@ export function init(config: InitConfig): InitResult {
   
   // Check if context was provided
   const hasContext = !!(
-    (config.request && config.response) || 
-    config.lambdaEdgeEvent || 
-    (typeof window !== 'undefined' && !config.request && !config.response && !config.lambdaEdgeEvent)
+    (config.request && config.response) ||
+    config.lambdaEdgeEvent ||
+    config.cloudflareWorkersRequest ||
+    (typeof window !== 'undefined' && !config.request && !config.response && !config.lambdaEdgeEvent && !config.cloudflareWorkersRequest)
   );
   
   // Create gatekeeper if context provided
@@ -183,6 +188,8 @@ export function init(config: InitConfig): InitResult {
     
     if (config.lambdaEdgeEvent) {
       context = new RequestContext({ lambdaEvent: config.lambdaEdgeEvent });
+    } else if (config.cloudflareWorkersRequest) {
+      context = new RequestContext({ cloudflareWorkersRequest: config.cloudflareWorkersRequest });
     } else if (config.request && config.response) {
       context = new RequestContext({ request: config.request, response: config.response });
     } else if (typeof window !== 'undefined') {
@@ -194,6 +201,7 @@ export function init(config: InitConfig): InitResult {
         'Provide either:\n' +
         '- { request, response } for Express/Node.js\n' +
         '- { lambdaEdgeEvent } for Lambda@Edge\n' +
+        '- { cloudflareWorkersRequest } for Cloudflare Workers\n' +
         '- Nothing for browser environment'
       );
     }

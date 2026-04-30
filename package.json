@@ -1,6 +1,6 @@
 {
   "name": "crowdhandler-sdk",
-  "version": "2.3.2",
+  "version": "2.4.0",
   "description": "",
   "homepage": "https://www.crowdhandler.com",
   "repository": {
@@ -14,6 +14,19 @@
   "module": "dist/crowdhandler.esm.js",
   "browser": "dist/crowdhandler.umd.js",
   "types": "dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "workerd": "./dist/crowdhandler.esm.js",
+      "worker": "./dist/crowdhandler.esm.js",
+      "browser": "./dist/crowdhandler.umd.js",
+      "import": "./dist/crowdhandler.esm.js",
+      "require": "./dist/crowdhandler.cjs.js",
+      "default": "./dist/crowdhandler.esm.js"
+    },
+    "./package.json": "./package.json",
+    "./dist/*": "./dist/*"
+  },
   "scripts": {
     "build": "npm run build:clean && npm run build:rollup && npm run build:legacy && npm run check:circular",
     "build:clean": "rm -rf dist",

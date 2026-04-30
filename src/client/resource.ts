@@ -63,9 +63,9 @@ export class Resource extends BaseClient {
     return super.httpPOST(this.path, requestBody);
   }
 
-  put(id: string, body: object) {
+  put(id: string, body: object, options?: { timeout?: number }) {
     this.path = this.formatPath(this.path, id);
 
-    return super.httpPUT(this.path, body);
+    return super.httpPUT(this.path, body, options);
   }
 }

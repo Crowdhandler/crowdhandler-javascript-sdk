@@ -34,6 +34,17 @@ export const GatekeeperKeyPair = z.object({
   privateKey: z.string().optional(),
 });
 
+// Centralised list of CrowdHandler query-string parameter keys.
+// Used wherever ch-* params need to be detected or stripped.
+export const CH_PARAM_KEYS: readonly string[] = [
+  'ch-code',
+  'ch-fresh',
+  'ch-id',
+  'ch-id-signature',
+  'ch-public-key',
+  'ch-requested',
+];
+
 export const SpecialParametersObject = z.object({
   chCode: z.string(),
   chID: z.string(),
@@ -193,6 +204,7 @@ export const RecordPerformanceOptions = z.object({
   sample: z.number().optional().default(0.2),
   overrideElapsed: z.number().optional(),
   responseID: z.string().optional(),
+  timeout: z.number().optional(),
 });
 
 // Mode constants

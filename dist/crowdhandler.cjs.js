@@ -1,5 +1,5 @@
 /**
- * CrowdHandler JavaScript SDK v2.3.1
+ * CrowdHandler JavaScript SDK v2.4.0
  * (c) 2026 CrowdHandler
  * @license ISC
  */
@@ -1039,6 +1039,19 @@ var createError = {
     }
 };
 
+/**
+ * Detect if we're running in the Cloudflare Workers (workerd) runtime.
+ * Workers sets navigator.userAgent to "Cloudflare-Workers" — this is the
+ * documented and stable detection signal:
+ * https://developers.cloudflare.com/workers/runtime-apis/web-standards/
+ */
+var isCloudflareWorkers = typeof navigator !== "undefined" &&
+    navigator.userAgent === "Cloudflare-Workers";
+
+// axios 0.27.2 has no fetch adapter and requires Node's http module, so it
+// crashes inside Workers. When isCloudflareWorkers is true we route HTTP
+// through native fetch instead — preserved error shape so errorHandler keeps
+// working.
 var APIResponse = zod.z.object({}).catchall(zod.z.any());
 zod.z
     .object({
@@ -1054,8 +1067,125 @@ var BaseClient = /** @class */ (function () {
         this.apiUrl = options.apiUrl || apiUrl;
         this.key = key;
         this.timeout = options.timeout || 5000;
-        axios__default["default"].defaults.timeout = this.timeout;
+        if (!isCloudflareWorkers) {
+            // axios.defaults is process-global state and is meaningless in Workers
+            // (we don't use axios there). Skip in Workers to avoid touching axios's
+            // internal config which can drag in Node-only deps during import.
+            axios__default["default"].defaults.timeout = this.timeout;
+        }
     }
+    /**
+     * Issue an HTTP request. Routes through axios in Node/Lambda environments
+     * and native fetch in Cloudflare Workers. Both paths return / throw
+     * axios-compatible shapes so errorHandler() and the response.data parsing
+     * downstream work unchanged.
+     */
+    BaseClient.prototype.httpRequest = function (method, url, options) {
+        var _a;
+        if (options === void 0) { options = {}; }
+        return __awaiter(this, void 0, void 0, function () {
+            var requestTimeout, response_1, finalUrl, search, _i, _b, _c, k, v, init, hasContentType, controller, timeoutId, response, err_1, wrapped, contentType, data, text, headersObj_1, wrapped, headersObj;
+            return __generator(this, function (_e) {
+                switch (_e.label) {
+                    case 0:
+                        requestTimeout = (_a = options.timeout) !== null && _a !== void 0 ? _a : this.timeout;
+                        if (!!isCloudflareWorkers) return [3 /*break*/, 2];
+                        return [4 /*yield*/, axios__default["default"].request({
+                                method: method,
+                                url: url,
+                                params: options.params,
+                                data: options.body,
+                                headers: options.headers,
+                                timeout: requestTimeout,
+                            })];
+                    case 1:
+                        response_1 = _e.sent();
+                        return [2 /*return*/, { data: response_1.data, status: response_1.status, headers: response_1.headers }];
+                    case 2:
+                        finalUrl = url;
+                        if (options.params && Object.keys(options.params).length > 0) {
+                            search = new URLSearchParams();
+                            for (_i = 0, _b = Object.entries(options.params); _i < _b.length; _i++) {
+                                _c = _b[_i], k = _c[0], v = _c[1];
+                                if (v !== undefined && v !== null)
+                                    search.append(k, String(v));
+                            }
+                            finalUrl += (finalUrl.includes("?") ? "&" : "?") + search.toString();
+                        }
+                        init = {
+                            method: method,
+                            headers: options.headers,
+                        };
+                        if (options.body !== undefined && method !== "GET" && method !== "DELETE") {
+                            init.body = typeof options.body === "string" ? options.body : JSON.stringify(options.body);
+                            hasContentType = options.headers && Object.keys(options.headers)
+                                .some(function (h) { return h.toLowerCase() === "content-type"; });
+                            if (!hasContentType) {
+                                init.headers = __assign(__assign({}, (options.headers || {})), { "content-type": "application/json" });
+                            }
+                        }
+                        controller = new AbortController();
+                        timeoutId = setTimeout(function () { return controller.abort(); }, requestTimeout);
+                        init.signal = controller.signal;
+                        _e.label = 3;
+                    case 3:
+                        _e.trys.push([3, 5, , 6]);
+                        return [4 /*yield*/, fetch(finalUrl, init)];
+                    case 4:
+                        response = _e.sent();
+                        return [3 /*break*/, 6];
+                    case 5:
+                        err_1 = _e.sent();
+                        clearTimeout(timeoutId);
+                        wrapped = new Error((err_1 === null || err_1 === void 0 ? void 0 : err_1.message) || "Network request failed");
+                        if (controller.signal.aborted || (err_1 === null || err_1 === void 0 ? void 0 : err_1.name) === "AbortError") {
+                            wrapped.code = "ECONNABORTED";
+                        }
+                        wrapped.request = { url: finalUrl, method: method };
+                        wrapped.config = { url: finalUrl, method: method };
+                        throw wrapped;
+                    case 6:
+                        clearTimeout(timeoutId);
+                        contentType = response.headers.get("content-type") || "";
+                        if (!contentType.includes("application/json")) return [3 /*break*/, 11];
+                        _e.label = 7;
+                    case 7:
+                        _e.trys.push([7, 9, , 10]);
+                        return [4 /*yield*/, response.json()];
+                    case 8:
+                        data = _e.sent();
+                        return [3 /*break*/, 10];
+                    case 9:
+                        _e.sent();
+                        data = null;
+                        return [3 /*break*/, 10];
+                    case 10: return [3 /*break*/, 13];
+                    case 11: return [4 /*yield*/, response.text()];
+                    case 12:
+                        text = _e.sent();
+                        try {
+                            data = JSON.parse(text);
+                        }
+                        catch (_f) {
+                            data = text;
+                        }
+                        _e.label = 13;
+                    case 13:
+                        if (response.status < 200 || response.status >= 300) {
+                            headersObj_1 = {};
+                            response.headers.forEach(function (v, k) { headersObj_1[k] = v; });
+                            wrapped = new Error("Request failed with status ".concat(response.status));
+                            wrapped.response = { status: response.status, data: data, headers: headersObj_1 };
+                            wrapped.config = { url: finalUrl, method: method };
+                            throw wrapped;
+                        }
+                        headersObj = {};
+                        response.headers.forEach(function (v, k) { headersObj[k] = v; });
+                        return [2 /*return*/, { data: data, status: response.status, headers: headersObj }];
+                }
+            });
+        });
+    };
     /**
      * Wraps any error into a CrowdHandlerError
      */
@@ -1151,7 +1281,7 @@ var BaseClient = /** @class */ (function () {
                 switch (_a.label) {
                     case 0:
                         _a.trys.push([0, 2, , 4]);
-                        return [4 /*yield*/, axios__default["default"].delete(this.apiUrl + path, {
+                        return [4 /*yield*/, this.httpRequest("DELETE", this.apiUrl + path, {
                                 headers: {
                                     "x-api-key": this.key,
                                 },
@@ -1183,7 +1313,7 @@ var BaseClient = /** @class */ (function () {
                 switch (_a.label) {
                     case 0:
                         _a.trys.push([0, 2, , 4]);
-                        return [4 /*yield*/, axios__default["default"].get(this.apiUrl + path, {
+                        return [4 /*yield*/, this.httpRequest("GET", this.apiUrl + path, {
                                 params: params,
                                 headers: {
                                     "x-api-key": this.key,
@@ -1217,7 +1347,8 @@ var BaseClient = /** @class */ (function () {
                 switch (_a.label) {
                     case 0:
                         _a.trys.push([0, 2, , 4]);
-                        return [4 /*yield*/, axios__default["default"].post(this.apiUrl + path, body, {
+                        return [4 /*yield*/, this.httpRequest("POST", this.apiUrl + path, {
+                                body: body,
                                 headers: __assign({ "x-api-key": this.key }, headers),
                             })];
                     case 1:
@@ -1240,17 +1371,19 @@ var BaseClient = /** @class */ (function () {
             });
         });
     };
-    BaseClient.prototype.httpPUT = function (path, body) {
+    BaseClient.prototype.httpPUT = function (path, body, options) {
         return __awaiter(this, void 0, void 0, function () {
             var response, error_4;
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
                         _a.trys.push([0, 2, , 3]);
-                        return [4 /*yield*/, axios__default["default"].put(this.apiUrl + path, body, {
+                        return [4 /*yield*/, this.httpRequest("PUT", this.apiUrl + path, {
+                                body: body,
                                 headers: {
                                     "x-api-key": this.key,
                                 },
+                                timeout: options === null || options === void 0 ? void 0 : options.timeout,
                             })];
                     case 1:
                         response = _a.sent();
@@ -1307,9 +1440,9 @@ var Resource = /** @class */ (function (_super) {
         );
         return _super.prototype.httpPOST.call(this, this.path, requestBody);
     };
-    Resource.prototype.put = function (id, body) {
+    Resource.prototype.put = function (id, body, options) {
         this.path = this.formatPath(this.path, id);
-        return _super.prototype.httpPUT.call(this, this.path, body);
+        return _super.prototype.httpPUT.call(this, this.path, body, options);
     };
     return Resource;
 }(BaseClient));
@@ -1707,6 +1840,78 @@ var BrowserHandler = /** @class */ (function () {
     return BrowserHandler;
 }());
 
+/**
+ * Handler for Cloudflare Workers (workerd) runtime.
+ *
+ * Mirrors the shape of LambdaRequestHandler — the Worker model is request-in /
+ * response-out (no mutable response object), so:
+ *   - read methods source from the Workers-native Request
+ *   - redirect() returns a Workers Response (caller returns it from fetch)
+ *   - setCookie() returns the Set-Cookie header value (caller appends it
+ *     to the outgoing Response)
+ *
+ * Cookie format and no-cache redirect headers mirror the existing
+ * crowdhandler-cloudflare-integration Worker so behaviour stays consistent
+ * across both deployment styles.
+ */
+var CloudflareWorkersHandler = /** @class */ (function () {
+    function CloudflareWorkersHandler(request) {
+        this.request = request;
+        this.url = new URL(request.url);
+    }
+    CloudflareWorkersHandler.prototype.getHeader = function (name) {
+        return this.request.headers.get(name) || "";
+    };
+    CloudflareWorkersHandler.prototype.getCookies = function () {
+        return this.request.headers.get("cookie") || "";
+    };
+    CloudflareWorkersHandler.prototype.getHost = function () {
+        // URL.host includes port when non-standard — matches Host header
+        // semantics used by the other handlers (Lambda/NodeJS/Browser).
+        return this.url.host;
+    };
+    CloudflareWorkersHandler.prototype.getProtocol = function () {
+        // URL.protocol includes the trailing ":" — strip it so the value matches
+        // the other handlers (which return "https" / "http").
+        return this.url.protocol.replace(/:$/, "");
+    };
+    CloudflareWorkersHandler.prototype.getPath = function () {
+        return this.url.pathname + this.url.search;
+    };
+    CloudflareWorkersHandler.prototype.getAbsoluteUri = function () {
+        return this.request.url;
+    };
+    CloudflareWorkersHandler.prototype.getUserHostAddress = function () {
+        // CF-Connecting-IP is the canonical client IP header on Workers
+        // (matches crowdhandler-cloudflare-integration/index.js).
+        return this.request.headers.get("cf-connecting-ip") || "";
+    };
+    CloudflareWorkersHandler.prototype.setCookie = function (value, cookieName, domain) {
+        if (cookieName === void 0) { cookieName = "crowdhandler"; }
+        // Returns the Set-Cookie header value — caller appends it to their
+        // outgoing Response. Format mirrors the existing CF integration.
+        var parts = ["".concat(cookieName, "=").concat(value), "path=/", "Secure"];
+        if (domain) {
+            parts.push("domain=".concat(domain));
+        }
+        return parts.join("; ");
+    };
+    CloudflareWorkersHandler.prototype.redirect = function (url) {
+        // Header casing and values mirror helpers.noCacheHeaders in
+        // crowdhandler-cloudflare-integration/helpers/misc.js.
+        return new Response(null, {
+            status: 302,
+            headers: {
+                Location: url,
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                Expires: "Fri, 01 Jan 1970 00:00:00 GMT",
+                Pragma: "no-cache",
+            },
+        });
+    };
+    return CloudflareWorkersHandler;
+}());
+
 var LambdaRequestHandler = /** @class */ (function () {
     function LambdaRequestHandler(event /*context: any, callback: any*/) {
         this.request = event;
@@ -1925,6 +2130,10 @@ var RequestContext = /** @class */ (function () {
                     var responseEvent = params.lambdaEvent;
                     return new LambdaResponseHandler(responseEvent.Records[0].cf.request, responseEvent.Records[0].cf.response);
             }
+            //Cloudflare Workers Request
+        }
+        else if (params && params.cloudflareWorkersRequest) {
+            return new CloudflareWorkersHandler(params.cloudflareWorkersRequest);
             //NodeJS HTTP request
         }
         else if (params && params.request && params.response) {
@@ -1974,6 +2183,16 @@ zod.z.object({
     publicKey: zod.z.string(),
     privateKey: zod.z.string().optional(),
 });
+// Centralised list of CrowdHandler query-string parameter keys.
+// Used wherever ch-* params need to be detected or stripped.
+var CH_PARAM_KEYS = [
+    'ch-code',
+    'ch-fresh',
+    'ch-id',
+    'ch-id-signature',
+    'ch-public-key',
+    'ch-requested',
+];
 var SpecialParametersObject = zod.z.object({
     chCode: zod.z.string(),
     chID: zod.z.string(),
@@ -2112,6 +2331,7 @@ var RecordPerformanceOptions = zod.z.object({
     sample: zod.z.number().optional().default(0.2),
     overrideElapsed: zod.z.number().optional(),
     responseID: zod.z.string().optional(),
+    timeout: zod.z.number().optional(),
 });
 // Mode constants
 var Modes = {
@@ -2288,20 +2508,11 @@ var ProcessURL = /** @class */ (function () {
     ProcessURL.prototype.removeChParams = function (queryString) {
         if (!queryString)
             return "";
-        // List of ch-* parameters to remove
-        var chParams = [
-            "ch-code",
-            "ch-fresh",
-            "ch-id",
-            "ch-id-signature",
-            "ch-public-key",
-            "ch-requested",
-        ];
         // Split into individual params, filter out ch-* params, rejoin
         var params = queryString.split("&");
         var filteredParams = params.filter(function (param) {
             var key = param.split("=")[0];
-            return !chParams.includes(key.toLowerCase());
+            return !CH_PARAM_KEYS.includes(key.toLowerCase());
         });
         return filteredParams.join("&");
     };
@@ -3074,23 +3285,6 @@ var Gatekeeper = /** @class */ (function () {
             }
             // Decode once to get the actual URL
             var decodedURL = decodeURIComponent(destinationUrl);
-            // Parse URL to handle parameters properly
-            var urlParts = decodedURL.split('?');
-            var baseUrl = urlParts[0];
-            var queryString = urlParts[1] || '';
-            // Parse existing parameters while preserving their values
-            var existingParams = [];
-            if (queryString) {
-                var params = queryString.split('&');
-                for (var _i = 0, params_1 = params; _i < params_1.length; _i++) {
-                    var param = params_1[_i];
-                    var key = param.split('=')[0];
-                    // Skip CrowdHandler parameters
-                    if (!['ch-id', 'ch-id-signature', 'ch-requested', 'ch-code', 'ch-fresh'].includes(key)) {
-                        existingParams.push(param);
-                    }
-                }
-            }
             // Build new CrowdHandler parameters
             var chParams = [
                 "ch-id=".concat(encodeURIComponent(this.token || '')),
@@ -3099,9 +3293,30 @@ var Gatekeeper = /** @class */ (function () {
                 "ch-code=".concat(encodeURIComponent(this.specialParameters.chCode || '')),
                 "ch-fresh=true"
             ];
-            // Construct final URL
+            // Separate hash fragment before parsing query params. This ensures
+            // ch-* params are placed in the real query string (window.location.search)
+            // rather than inside the hash fragment where host-domain scripts cannot
+            // read them via URLSearchParams.
+            var hashIndex = decodedURL.indexOf('#');
+            var urlWithoutHash = hashIndex !== -1 ? decodedURL.substring(0, hashIndex) : decodedURL;
+            var hashPart = hashIndex !== -1 ? decodedURL.substring(hashIndex) : '';
+            // Parse existing query string, stripping any existing ch-* params
+            var _g = urlWithoutHash.split('?'), baseUrl = _g[0], queryParts = _g.slice(1);
+            var queryString = queryParts.join('?');
+            var existingParams = [];
+            if (queryString) {
+                var params = queryString.split('&');
+                for (var _i = 0, params_1 = params; _i < params_1.length; _i++) {
+                    var param = params_1[_i];
+                    var key = param.split('=')[0];
+                    if (!CH_PARAM_KEYS.includes(key)) {
+                        existingParams.push(param);
+                    }
+                }
+            }
+            // Construct final URL with ch-* params before any hash fragment
             var allParams = existingParams.concat(chParams);
-            var finalUrl = baseUrl + (allParams.length > 0 ? '?' + allParams.join('&') : '');
+            var finalUrl = baseUrl + (allParams.length > 0 ? '?' + allParams.join('&') : '') + hashPart;
             logger(this.options.debug, "info", "[WaitingRoom] Redirecting promoted user to: ".concat(finalUrl));
             return this.REQUEST.redirect(finalUrl);
         }
@@ -3298,11 +3513,22 @@ var Gatekeeper = /** @class */ (function () {
      *
      * @param {string} value - The cookie value to set (from result.cookieValue)
      * @param {string} domain - Optional domain pattern to determine cookie domain scope
-     * @returns {boolean} True if the cookie was successfully set, false otherwise
+     * @returns {boolean | string} In Node.js/Lambda/browser environments returns true on success
+     *   or false on failure. In Cloudflare Workers returns the Set-Cookie header string that
+     *   must be applied to the outgoing Response by the caller.
      *
      * @example
+     * // Node.js / Lambda
      * if (result.setCookie) {
      *   gatekeeper.setCookie(result.cookieValue, result.domain);
+     * }
+     *
+     * @example
+     * // Cloudflare Workers
+     * if (result.setCookie) {
+     *   const setCookieHeader = gatekeeper.setCookie(result.cookieValue, result.domain);
+     *   // setCookieHeader is the Set-Cookie header value — apply it to the Response:
+     *   // response.headers.append('Set-Cookie', setCookieHeader as string);
      * }
      */
     Gatekeeper.prototype.setCookie = function (value, domain) {
@@ -3316,9 +3542,12 @@ var Gatekeeper = /** @class */ (function () {
                     logger(this.options.debug, "info", "Setting cookie with domain: ".concat(cookieDomain));
                 }
             }
-            // Set the cookie with the provided value and options
-            this.REQUEST.setCookie(value, this.STORAGE_NAME, cookieDomain);
-            return true;
+            // Set the cookie with the provided value and options.
+            // CloudflareWorkersHandler returns the Set-Cookie header string because
+            // Workers are response-out and the caller must apply the header manually.
+            // All other handlers set the cookie as a side-effect and return void.
+            var result = this.REQUEST.setCookie(value, this.STORAGE_NAME, cookieDomain);
+            return typeof result === 'string' ? result : true;
         }
         catch (error) {
             logger(this.options.debug, "error", error);
@@ -3396,35 +3625,42 @@ var Gatekeeper = /** @class */ (function () {
      */
     Gatekeeper.prototype.recordPerformance = function (options) {
         return __awaiter(this, void 0, void 0, function () {
-            var validatedOptions, statusCode, sample, overrideElapsed, responseID, lottery, currentResponseID, elapsed;
+            var validatedOptions, statusCode, sample, overrideElapsed, responseID, timeout, lottery, currentResponseID, elapsed, sampleRate, putPromise, error_3;
             return __generator(this, function (_a) {
-                try {
-                    validatedOptions = options
-                        ? RecordPerformanceOptions.parse(options)
-                        : {
-                            statusCode: 200,
-                            sample: 0.2,
-                            overrideElapsed: undefined,
-                            responseID: undefined, // no responseID
-                        };
-                    statusCode = validatedOptions.statusCode, sample = validatedOptions.sample, overrideElapsed = validatedOptions.overrideElapsed, responseID = validatedOptions.responseID;
-                    lottery = Math.random();
-                    currentResponseID = responseID || this.responseID;
-                    // If there's no responseID or if the random number is higher than the sample rate, return early
-                    if (!currentResponseID || lottery >= sample) {
-                        return [2 /*return*/];
-                    }
-                    elapsed = overrideElapsed !== undefined ? overrideElapsed : this.timer.elapsed();
-                    // Asynchronously send the performance data to CrowdHandler, no need to await the promise
-                    this.PublicClient.responses().put(currentResponseID, {
-                        httpCode: statusCode,
-                        time: elapsed,
-                    });
+                switch (_a.label) {
+                    case 0:
+                        _a.trys.push([0, 3, , 4]);
+                        validatedOptions = options
+                            ? RecordPerformanceOptions.parse(options)
+                            : {
+                                statusCode: 200,
+                                sample: 0.2,
+                                overrideElapsed: undefined,
+                                responseID: undefined,
+                                timeout: undefined, // no per-call timeout override
+                            };
+                        statusCode = validatedOptions.statusCode, sample = validatedOptions.sample, overrideElapsed = validatedOptions.overrideElapsed, responseID = validatedOptions.responseID, timeout = validatedOptions.timeout;
+                        lottery = Math.random();
+                        currentResponseID = responseID || this.responseID;
+                        // If there's no responseID or if the random number is higher than the sample rate, return early
+                        if (!currentResponseID || lottery >= sample) {
+                            return [2 /*return*/];
+                        }
+                        elapsed = overrideElapsed !== undefined ? overrideElapsed : this.timer.elapsed();
+                        sampleRate = Math.max(1, Math.round(1 / sample));
+                        putPromise = this.PublicClient.responses().put(currentResponseID, { httpCode: statusCode, sampleRate: sampleRate, time: elapsed }, { timeout: timeout !== null && timeout !== void 0 ? timeout : 1500 });
+                        if (!isCloudflareWorkers) return [3 /*break*/, 2];
+                        return [4 /*yield*/, putPromise];
+                    case 1:
+                        _a.sent();
+                        _a.label = 2;
+                    case 2: return [3 /*break*/, 4];
+                    case 3:
+                        error_3 = _a.sent();
+                        logger(this.options.debug, "Error recording performance:", error_3);
+                        return [3 /*break*/, 4];
+                    case 4: return [2 /*return*/];
                 }
-                catch (error) {
-                    logger(this.options.debug, "Error recording performance:", error);
-                }
-                return [2 /*return*/];
             });
         });
     };
@@ -3678,7 +3914,7 @@ var Gatekeeper = /** @class */ (function () {
     Gatekeeper.prototype.validateRequestClientSideMode = function (customParams) {
         var _a, _b, _c, _d, _e;
         return __awaiter(this, void 0, void 0, function () {
-            var result, statusCode, errorMessage, liteCheck, mergedParams, sessionStatusType, status_1, errorMessage, _f, promoted, slug, token, responseID, deployment, hash, requested, domain, error_3;
+            var result, statusCode, errorMessage, liteCheck, mergedParams, sessionStatusType, status_1, errorMessage, _f, promoted, slug, token, responseID, deployment, hash, requested, domain, error_4;
             return __generator(this, function (_g) {
                 switch (_g.label) {
                     case 0:
@@ -3819,9 +4055,9 @@ var Gatekeeper = /** @class */ (function () {
                         }
                         return [2 /*return*/, result];
                     case 3:
-                        error_3 = _g.sent();
-                        logger(this.options.debug, "error", "An error occurred during request validation: ".concat(error_3));
-                        throw error_3;
+                        error_4 = _g.sent();
+                        logger(this.options.debug, "error", "An error occurred during request validation: ".concat(error_4));
+                        throw error_4;
                     case 4: return [2 /*return*/];
                 }
             });
@@ -3836,7 +4072,7 @@ var Gatekeeper = /** @class */ (function () {
     Gatekeeper.prototype.validateRequestFullMode = function (customParams) {
         var _a, _b, _c, _d, _e;
         return __awaiter(this, void 0, void 0, function () {
-            var result, statusCode, errorMessage, liteCheck, mergedParams, sessionStatusType, status_2, errorMessage, _f, promoted, slug, token, responseID, deployment, hash, requested, domain, error_4;
+            var result, statusCode, errorMessage, liteCheck, mergedParams, sessionStatusType, status_2, errorMessage, _f, promoted, slug, token, responseID, deployment, hash, requested, domain, error_5;
             return __generator(this, function (_g) {
                 switch (_g.label) {
                     case 0:
@@ -3977,9 +4213,9 @@ var Gatekeeper = /** @class */ (function () {
                         }
                         return [2 /*return*/, result];
                     case 3:
-                        error_4 = _g.sent();
-                        logger(this.options.debug, "error", "An error occurred during request validation: ".concat(error_4));
-                        throw error_4;
+                        error_5 = _g.sent();
+                        logger(this.options.debug, "error", "An error occurred during request validation: ".concat(error_5));
+                        throw error_5;
                     case 4: return [2 /*return*/];
                 }
             });
@@ -3993,7 +4229,7 @@ var Gatekeeper = /** @class */ (function () {
     Gatekeeper.prototype.validateRequestHybridMode = function (customParams) {
         var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p;
         return __awaiter(this, void 0, void 0, function () {
-            var signatures, tokens, freshToken, freshSignature, result, statusCode, errorMessage, liteCheck, configStatusType, status_3, errorMessage, mergedParams, sessionStatusType, status_4, errorMessage, token, hash, error_5, validationResult, mergedParams, sessionStatusType, status_5, errorMessage, hash, token, error_6, _i, _q, item, _r, _s, item;
+            var signatures, tokens, freshToken, freshSignature, result, statusCode, errorMessage, liteCheck, configStatusType, status_3, errorMessage, mergedParams, sessionStatusType, status_4, errorMessage, token, hash, error_6, validationResult, mergedParams, sessionStatusType, status_5, errorMessage, hash, token, error_7, _i, _q, item, _r, _s, item;
             var _this = this;
             return __generator(this, function (_t) {
                 switch (_t.label) {
@@ -4188,8 +4424,8 @@ var Gatekeeper = /** @class */ (function () {
                         }
                         return [3 /*break*/, 5];
                     case 4:
-                        error_5 = _t.sent();
-                        logger(this.options.debug, "error", error_5);
+                        error_6 = _t.sent();
+                        logger(this.options.debug, "error", error_6);
                         return [3 /*break*/, 5];
                     case 5:
                         logger(this.options.debug, "info", "Signature and token found. Validating...");
@@ -4264,8 +4500,8 @@ var Gatekeeper = /** @class */ (function () {
                         }
                         return [3 /*break*/, 9];
                     case 8:
-                        error_6 = _t.sent();
-                        logger(this.options.debug, "error", error_6);
+                        error_7 = _t.sent();
+                        logger(this.options.debug, "error", error_7);
                         return [3 /*break*/, 9];
                     case 9:
                         //part 2 here
@@ -4357,7 +4593,8 @@ function init(config) {
     // Check if context was provided
     var hasContext = !!((config.request && config.response) ||
         config.lambdaEdgeEvent ||
-        (typeof window !== 'undefined' && !config.request && !config.response && !config.lambdaEdgeEvent));
+        config.cloudflareWorkersRequest ||
+        (typeof window !== 'undefined' && !config.request && !config.response && !config.lambdaEdgeEvent && !config.cloudflareWorkersRequest));
     // Create gatekeeper if context provided
     var gatekeeper;
     if (hasContext) {
@@ -4365,6 +4602,9 @@ function init(config) {
         var context = void 0;
         if (config.lambdaEdgeEvent) {
             context = new RequestContext({ lambdaEvent: config.lambdaEdgeEvent });
+        }
+        else if (config.cloudflareWorkersRequest) {
+            context = new RequestContext({ cloudflareWorkersRequest: config.cloudflareWorkersRequest });
         }
         else if (config.request && config.response) {
             context = new RequestContext({ request: config.request, response: config.response });
@@ -4376,6 +4616,7 @@ function init(config) {
             throw new CrowdHandlerError(ErrorCodes.INVALID_CONTEXT, 'Invalid context configuration', 'Provide either:\n' +
                 '- { request, response } for Express/Node.js\n' +
                 '- { lambdaEdgeEvent } for Lambda@Edge\n' +
+                '- { cloudflareWorkersRequest } for Cloudflare Workers\n' +
                 '- Nothing for browser environment');
         }
         // Auto-detect mode

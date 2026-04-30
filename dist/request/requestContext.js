@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.RequestContext = void 0;
 var browserHandler_1 = require("./browserHandler");
+var cloudflareWorkersHandler_1 = require("./cloudflareWorkersHandler");
 var lambdaRequestHandler_1 = require("./lambdaRequestHandler");
 var lambdaResponseHandler_1 = require("./lambdaResponseHandler");
 var nodejsHandler_1 = require("./nodejsHandler");
@@ -27,6 +28,10 @@ var RequestContext = /** @class */ (function () {
                     return new lambdaResponseHandler_1.LambdaResponseHandler(responseEvent.Records[0].cf.request, responseEvent.Records[0].cf.response);
                     break;
             }
+            //Cloudflare Workers Request
+        }
+        else if (params && params.cloudflareWorkersRequest) {
+            return new cloudflareWorkersHandler_1.CloudflareWorkersHandler(params.cloudflareWorkersRequest);
             //NodeJS HTTP request
         }
         else if (params && params.request && params.response) {

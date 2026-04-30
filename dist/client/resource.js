@@ -80,9 +80,9 @@ var Resource = /** @class */ (function (_super) {
         );
         return _super.prototype.httpPOST.call(this, this.path, requestBody);
     };
-    Resource.prototype.put = function (id, body) {
+    Resource.prototype.put = function (id, body, options) {
         this.path = this.formatPath(this.path, id);
-        return _super.prototype.httpPUT.call(this, this.path, body);
+        return _super.prototype.httpPUT.call(this, this.path, body, options);
     };
     return Resource;
 }(base_client_1.BaseClient));

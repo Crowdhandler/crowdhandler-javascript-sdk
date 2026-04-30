@@ -15,6 +15,8 @@ export interface InitConfig {
     response?: any;
     /** AWS Lambda@Edge event object */
     lambdaEdgeEvent?: any;
+    /** Cloudflare Workers Request object (workerd runtime) */
+    cloudflareWorkersRequest?: any;
     /** Additional configuration options */
     options?: {
         /**
@@ -124,5 +126,8 @@ export declare function init(config: InitConfig & {
 }): InitResultWithGatekeeper;
 export declare function init(config: InitConfig & {
     lambdaEdgeEvent: any;
+}): InitResultWithGatekeeper;
+export declare function init(config: InitConfig & {
+    cloudflareWorkersRequest: any;
 }): InitResultWithGatekeeper;
 export declare function init(config: InitConfig): InitResult;
