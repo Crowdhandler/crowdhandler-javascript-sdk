@@ -7635,6 +7635,9 @@
 	                        err_1 = _e.sent();
 	                        clearTimeout(timeoutId);
 	                        wrapped = new Error((err_1 === null || err_1 === void 0 ? void 0 : err_1.message) || "Network request failed");
+	                        if (controller.signal.aborted || (err_1 === null || err_1 === void 0 ? void 0 : err_1.name) === "AbortError") {
+	                            wrapped.code = "ECONNABORTED";
+	                        }
 	                        wrapped.request = { url: finalUrl, method: method };
 	                        wrapped.config = { url: finalUrl, method: method };
 	                        throw wrapped;
@@ -10534,11 +10537,22 @@
 	     *
 	     * @param {string} value - The cookie value to set (from result.cookieValue)
 	     * @param {string} domain - Optional domain pattern to determine cookie domain scope
-	     * @returns {boolean} True if the cookie was successfully set, false otherwise
+	     * @returns {boolean | string} In Node.js/Lambda/browser environments returns true on success
+	     *   or false on failure. In Cloudflare Workers returns the Set-Cookie header string that
+	     *   must be applied to the outgoing Response by the caller.
 	     *
 	     * @example
+	     * // Node.js / Lambda
 	     * if (result.setCookie) {
 	     *   gatekeeper.setCookie(result.cookieValue, result.domain);
+	     * }
+	     *
+	     * @example
+	     * // Cloudflare Workers
+	     * if (result.setCookie) {
+	     *   const setCookieHeader = gatekeeper.setCookie(result.cookieValue, result.domain);
+	     *   // setCookieHeader is the Set-Cookie header value — apply it to the Response:
+	     *   // response.headers.append('Set-Cookie', setCookieHeader as string);
 	     * }
 	     */
 	    Gatekeeper.prototype.setCookie = function (value, domain) {
@@ -10552,9 +10566,12 @@
 	                    logger(this.options.debug, "info", "Setting cookie with domain: ".concat(cookieDomain));
 	                }
 	            }
-	            // Set the cookie with the provided value and options
-	            this.REQUEST.setCookie(value, this.STORAGE_NAME, cookieDomain);
-	            return true;
+	            // Set the cookie with the provided value and options.
+	            // CloudflareWorkersHandler returns the Set-Cookie header string because
+	            // Workers are response-out and the caller must apply the header manually.
+	            // All other handlers set the cookie as a side-effect and return void.
+	            var result = this.REQUEST.setCookie(value, this.STORAGE_NAME, cookieDomain);
+	            return typeof result === 'string' ? result : true;
 	        }
 	        catch (error) {
 	            logger(this.options.debug, "error", error);

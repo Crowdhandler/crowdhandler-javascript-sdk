@@ -209,14 +209,25 @@ export declare class Gatekeeper {
      *
      * @param {string} value - The cookie value to set (from result.cookieValue)
      * @param {string} domain - Optional domain pattern to determine cookie domain scope
-     * @returns {boolean} True if the cookie was successfully set, false otherwise
+     * @returns {boolean | string} In Node.js/Lambda/browser environments returns true on success
+     *   or false on failure. In Cloudflare Workers returns the Set-Cookie header string that
+     *   must be applied to the outgoing Response by the caller.
      *
      * @example
+     * // Node.js / Lambda
      * if (result.setCookie) {
      *   gatekeeper.setCookie(result.cookieValue, result.domain);
      * }
+     *
+     * @example
+     * // Cloudflare Workers
+     * if (result.setCookie) {
+     *   const setCookieHeader = gatekeeper.setCookie(result.cookieValue, result.domain);
+     *   // setCookieHeader is the Set-Cookie header value — apply it to the Response:
+     *   // response.headers.append('Set-Cookie', setCookieHeader as string);
+     * }
      */
-    setCookie(value: string, domain?: string): boolean;
+    setCookie(value: string, domain?: string): boolean | string;
     /**
      * Set a local storage item.
      *

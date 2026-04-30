@@ -146,6 +146,9 @@ var BaseClient = /** @class */ (function () {
                         err_1 = _e.sent();
                         clearTimeout(timeoutId);
                         wrapped = new Error((err_1 === null || err_1 === void 0 ? void 0 : err_1.message) || "Network request failed");
+                        if (controller.signal.aborted || (err_1 === null || err_1 === void 0 ? void 0 : err_1.name) === "AbortError") {
+                            wrapped.code = "ECONNABORTED";
+                        }
                         wrapped.request = { url: finalUrl, method: method };
                         wrapped.config = { url: finalUrl, method: method };
                         throw wrapped;
