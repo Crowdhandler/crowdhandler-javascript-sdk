@@ -17,8 +17,8 @@
   "exports": {
     ".": {
       "types": "./dist/types/index.d.ts",
-      "workerd": "./dist/crowdhandler.umd.js",
-      "worker": "./dist/crowdhandler.umd.js",
+      "workerd": "./dist/crowdhandler.esm.js",
+      "worker": "./dist/crowdhandler.esm.js",
       "browser": "./dist/crowdhandler.umd.js",
       "import": "./dist/crowdhandler.esm.js",
       "require": "./dist/crowdhandler.cjs.js",
