@@ -8,6 +8,7 @@ import { getLang } from "../common/languageDiscover";
 import { getUserAgent } from "../common/userAgentDiscover";
 import { Timer } from "../common/timer";
 import { ignoredPatternsCheck } from "../common/ignoredPatternsCheck";
+import { isCloudflareWorkers } from "../common/runtime";
 import "../common/types";
 import { z } from "zod";
 import {
@@ -1083,9 +1084,10 @@ export class Gatekeeper {
             sample: 0.2, // default sample rate
             overrideElapsed: undefined, // no elapsed time override
             responseID: undefined, // no responseID
+            timeout: undefined, // no per-call timeout override
           };
 
-      const { statusCode, sample, overrideElapsed, responseID } =
+      const { statusCode, sample, overrideElapsed, responseID, timeout } =
         validatedOptions;
 
       // Generate a random number for sampling
@@ -1100,11 +1102,27 @@ export class Gatekeeper {
       const elapsed =
         overrideElapsed !== undefined ? overrideElapsed : this.timer.elapsed();
 
-      // Asynchronously send the performance data to CrowdHandler, no need to await the promise
-      this.PublicClient.responses().put(currentResponseID, {
-        httpCode: statusCode,
-        time: elapsed,
-      });
+      // sampleRate tells the server how many real events each row represents,
+      // and bypasses the server's default 33% gating (which only kicks in when
+      // sampleRate is null). For sample=1 this is 1; for sample=0.2 this is 5.
+      const sampleRate = Math.max(1, Math.round(1 / sample));
+
+      // Default 1500ms — recordPerformance is fire-after-response observability,
+      // we don't want a slow API to hold the worker isolate longer than needed
+      // when called from inside ctx.waitUntil(). Caller can override via opts.
+      const putPromise = this.PublicClient.responses().put(
+        currentResponseID,
+        { httpCode: statusCode, sampleRate, time: elapsed },
+        { timeout: timeout ?? 1500 },
+      );
+
+      // Fire-and-forget on Node/Lambda/Browser (non-critical, no need to
+      // delay the caller). On Workers, await — ctx.waitUntil(recordPerformance(...))
+      // only extends the request lifetime until the awaited Promise chain
+      // resolves, so without this the runtime cancels the orphaned fetch.
+      if (isCloudflareWorkers) {
+        await putPromise;
+      }
     } catch (error: any) {
       logger(this.options.debug, "Error recording performance:", error);
     }

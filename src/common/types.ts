@@ -204,6 +204,7 @@ export const RecordPerformanceOptions = z.object({
   sample: z.number().optional().default(0.2),
   overrideElapsed: z.number().optional(),
   responseID: z.string().optional(),
+  timeout: z.number().optional(),
 });
 
 // Mode constants

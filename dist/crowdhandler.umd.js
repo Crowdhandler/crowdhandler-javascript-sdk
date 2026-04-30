@@ -7541,13 +7541,14 @@
 	 * Workers sets navigator.userAgent to "Cloudflare-Workers" — this is the
 	 * documented and stable detection signal:
 	 * https://developers.cloudflare.com/workers/runtime-apis/web-standards/
-	 *
-	 * axios 0.27.2 has no fetch adapter and requires Node's http module, so it
-	 * crashes inside Workers. When we detect Workers, route HTTP through native
-	 * fetch instead — preserved error shape so errorHandler keeps working.
 	 */
 	var isCloudflareWorkers = typeof navigator !== "undefined" &&
 	    navigator.userAgent === "Cloudflare-Workers";
+
+	// axios 0.27.2 has no fetch adapter and requires Node's http module, so it
+	// crashes inside Workers. When isCloudflareWorkers is true we route HTTP
+	// through native fetch instead — preserved error shape so errorHandler keeps
+	// working.
 	var APIResponse = z.object({}).catchall(z.any());
 	z
 	    .object({
@@ -7577,12 +7578,14 @@
 	     * downstream work unchanged.
 	     */
 	    BaseClient.prototype.httpRequest = function (method, url, options) {
+	        var _a;
 	        if (options === void 0) { options = {}; }
 	        return __awaiter(this, void 0, void 0, function () {
-	            var response_1, finalUrl, search, _i, _a, _b, k, v, init, hasContentType, controller, timeoutId, response, err_1, wrapped, contentType, data, text, headersObj_1, wrapped, headersObj;
-	            return __generator(this, function (_d) {
-	                switch (_d.label) {
+	            var requestTimeout, response_1, finalUrl, search, _i, _b, _c, k, v, init, hasContentType, controller, timeoutId, response, err_1, wrapped, contentType, data, text, headersObj_1, wrapped, headersObj;
+	            return __generator(this, function (_e) {
+	                switch (_e.label) {
 	                    case 0:
+	                        requestTimeout = (_a = options.timeout) !== null && _a !== void 0 ? _a : this.timeout;
 	                        if (!!isCloudflareWorkers) return [3 /*break*/, 2];
 	                        return [4 /*yield*/, axios.request({
 	                                method: method,
@@ -7590,16 +7593,17 @@
 	                                params: options.params,
 	                                data: options.body,
 	                                headers: options.headers,
+	                                timeout: requestTimeout,
 	                            })];
 	                    case 1:
-	                        response_1 = _d.sent();
+	                        response_1 = _e.sent();
 	                        return [2 /*return*/, { data: response_1.data, status: response_1.status, headers: response_1.headers }];
 	                    case 2:
 	                        finalUrl = url;
 	                        if (options.params && Object.keys(options.params).length > 0) {
 	                            search = new URLSearchParams();
-	                            for (_i = 0, _a = Object.entries(options.params); _i < _a.length; _i++) {
-	                                _b = _a[_i], k = _b[0], v = _b[1];
+	                            for (_i = 0, _b = Object.entries(options.params); _i < _b.length; _i++) {
+	                                _c = _b[_i], k = _c[0], v = _c[1];
 	                                if (v !== undefined && v !== null)
 	                                    search.append(k, String(v));
 	                            }
@@ -7618,17 +7622,17 @@
 	                            }
 	                        }
 	                        controller = new AbortController();
-	                        timeoutId = setTimeout(function () { return controller.abort(); }, this.timeout);
+	                        timeoutId = setTimeout(function () { return controller.abort(); }, requestTimeout);
 	                        init.signal = controller.signal;
-	                        _d.label = 3;
+	                        _e.label = 3;
 	                    case 3:
-	                        _d.trys.push([3, 5, , 6]);
+	                        _e.trys.push([3, 5, , 6]);
 	                        return [4 /*yield*/, fetch(finalUrl, init)];
 	                    case 4:
-	                        response = _d.sent();
+	                        response = _e.sent();
 	                        return [3 /*break*/, 6];
 	                    case 5:
-	                        err_1 = _d.sent();
+	                        err_1 = _e.sent();
 	                        clearTimeout(timeoutId);
 	                        wrapped = new Error((err_1 === null || err_1 === void 0 ? void 0 : err_1.message) || "Network request failed");
 	                        wrapped.request = { url: finalUrl, method: method };
@@ -7638,28 +7642,28 @@
 	                        clearTimeout(timeoutId);
 	                        contentType = response.headers.get("content-type") || "";
 	                        if (!contentType.includes("application/json")) return [3 /*break*/, 11];
-	                        _d.label = 7;
+	                        _e.label = 7;
 	                    case 7:
-	                        _d.trys.push([7, 9, , 10]);
+	                        _e.trys.push([7, 9, , 10]);
 	                        return [4 /*yield*/, response.json()];
 	                    case 8:
-	                        data = _d.sent();
+	                        data = _e.sent();
 	                        return [3 /*break*/, 10];
 	                    case 9:
-	                        _d.sent();
+	                        _e.sent();
 	                        data = null;
 	                        return [3 /*break*/, 10];
 	                    case 10: return [3 /*break*/, 13];
 	                    case 11: return [4 /*yield*/, response.text()];
 	                    case 12:
-	                        text = _d.sent();
+	                        text = _e.sent();
 	                        try {
 	                            data = JSON.parse(text);
 	                        }
-	                        catch (_e) {
+	                        catch (_f) {
 	                            data = text;
 	                        }
-	                        _d.label = 13;
+	                        _e.label = 13;
 	                    case 13:
 	                        if (response.status < 200 || response.status >= 300) {
 	                            headersObj_1 = {};
@@ -7861,7 +7865,7 @@
 	            });
 	        });
 	    };
-	    BaseClient.prototype.httpPUT = function (path, body) {
+	    BaseClient.prototype.httpPUT = function (path, body, options) {
 	        return __awaiter(this, void 0, void 0, function () {
 	            var response, error_4;
 	            return __generator(this, function (_a) {
@@ -7873,6 +7877,7 @@
 	                                headers: {
 	                                    "x-api-key": this.key,
 	                                },
+	                                timeout: options === null || options === void 0 ? void 0 : options.timeout,
 	                            })];
 	                    case 1:
 	                        response = _a.sent();
@@ -7929,9 +7934,9 @@
 	        );
 	        return _super.prototype.httpPOST.call(this, this.path, requestBody);
 	    };
-	    Resource.prototype.put = function (id, body) {
+	    Resource.prototype.put = function (id, body, options) {
 	        this.path = this.formatPath(this.path, id);
-	        return _super.prototype.httpPUT.call(this, this.path, body);
+	        return _super.prototype.httpPUT.call(this, this.path, body, options);
 	    };
 	    return Resource;
 	}(BaseClient));
@@ -8820,6 +8825,7 @@
 	    sample: z.number().optional().default(0.2),
 	    overrideElapsed: z.number().optional(),
 	    responseID: z.string().optional(),
+	    timeout: z.number().optional(),
 	});
 	// Mode constants
 	var Modes = {
@@ -10626,35 +10632,42 @@
 	     */
 	    Gatekeeper.prototype.recordPerformance = function (options) {
 	        return __awaiter(this, void 0, void 0, function () {
-	            var validatedOptions, statusCode, sample, overrideElapsed, responseID, lottery, currentResponseID, elapsed;
+	            var validatedOptions, statusCode, sample, overrideElapsed, responseID, timeout, lottery, currentResponseID, elapsed, sampleRate, putPromise, error_3;
 	            return __generator(this, function (_a) {
-	                try {
-	                    validatedOptions = options
-	                        ? RecordPerformanceOptions.parse(options)
-	                        : {
-	                            statusCode: 200,
-	                            sample: 0.2,
-	                            overrideElapsed: undefined,
-	                            responseID: undefined, // no responseID
-	                        };
-	                    statusCode = validatedOptions.statusCode, sample = validatedOptions.sample, overrideElapsed = validatedOptions.overrideElapsed, responseID = validatedOptions.responseID;
-	                    lottery = Math.random();
-	                    currentResponseID = responseID || this.responseID;
-	                    // If there's no responseID or if the random number is higher than the sample rate, return early
-	                    if (!currentResponseID || lottery >= sample) {
-	                        return [2 /*return*/];
-	                    }
-	                    elapsed = overrideElapsed !== undefined ? overrideElapsed : this.timer.elapsed();
-	                    // Asynchronously send the performance data to CrowdHandler, no need to await the promise
-	                    this.PublicClient.responses().put(currentResponseID, {
-	                        httpCode: statusCode,
-	                        time: elapsed,
-	                    });
+	                switch (_a.label) {
+	                    case 0:
+	                        _a.trys.push([0, 3, , 4]);
+	                        validatedOptions = options
+	                            ? RecordPerformanceOptions.parse(options)
+	                            : {
+	                                statusCode: 200,
+	                                sample: 0.2,
+	                                overrideElapsed: undefined,
+	                                responseID: undefined,
+	                                timeout: undefined, // no per-call timeout override
+	                            };
+	                        statusCode = validatedOptions.statusCode, sample = validatedOptions.sample, overrideElapsed = validatedOptions.overrideElapsed, responseID = validatedOptions.responseID, timeout = validatedOptions.timeout;
+	                        lottery = Math.random();
+	                        currentResponseID = responseID || this.responseID;
+	                        // If there's no responseID or if the random number is higher than the sample rate, return early
+	                        if (!currentResponseID || lottery >= sample) {
+	                            return [2 /*return*/];
+	                        }
+	                        elapsed = overrideElapsed !== undefined ? overrideElapsed : this.timer.elapsed();
+	                        sampleRate = Math.max(1, Math.round(1 / sample));
+	                        putPromise = this.PublicClient.responses().put(currentResponseID, { httpCode: statusCode, sampleRate: sampleRate, time: elapsed }, { timeout: timeout !== null && timeout !== void 0 ? timeout : 1500 });
+	                        if (!isCloudflareWorkers) return [3 /*break*/, 2];
+	                        return [4 /*yield*/, putPromise];
+	                    case 1:
+	                        _a.sent();
+	                        _a.label = 2;
+	                    case 2: return [3 /*break*/, 4];
+	                    case 3:
+	                        error_3 = _a.sent();
+	                        logger(this.options.debug, "Error recording performance:", error_3);
+	                        return [3 /*break*/, 4];
+	                    case 4: return [2 /*return*/];
 	                }
-	                catch (error) {
-	                    logger(this.options.debug, "Error recording performance:", error);
-	                }
-	                return [2 /*return*/];
 	            });
 	        });
 	    };
@@ -10908,7 +10921,7 @@
 	    Gatekeeper.prototype.validateRequestClientSideMode = function (customParams) {
 	        var _a, _b, _c, _d, _e;
 	        return __awaiter(this, void 0, void 0, function () {
-	            var result, statusCode, errorMessage, liteCheck, mergedParams, sessionStatusType, status_1, errorMessage, _f, promoted, slug, token, responseID, deployment, hash, requested, domain, error_3;
+	            var result, statusCode, errorMessage, liteCheck, mergedParams, sessionStatusType, status_1, errorMessage, _f, promoted, slug, token, responseID, deployment, hash, requested, domain, error_4;
 	            return __generator(this, function (_g) {
 	                switch (_g.label) {
 	                    case 0:
@@ -11049,9 +11062,9 @@
 	                        }
 	                        return [2 /*return*/, result];
 	                    case 3:
-	                        error_3 = _g.sent();
-	                        logger(this.options.debug, "error", "An error occurred during request validation: ".concat(error_3));
-	                        throw error_3;
+	                        error_4 = _g.sent();
+	                        logger(this.options.debug, "error", "An error occurred during request validation: ".concat(error_4));
+	                        throw error_4;
 	                    case 4: return [2 /*return*/];
 	                }
 	            });
@@ -11066,7 +11079,7 @@
 	    Gatekeeper.prototype.validateRequestFullMode = function (customParams) {
 	        var _a, _b, _c, _d, _e;
 	        return __awaiter(this, void 0, void 0, function () {
-	            var result, statusCode, errorMessage, liteCheck, mergedParams, sessionStatusType, status_2, errorMessage, _f, promoted, slug, token, responseID, deployment, hash, requested, domain, error_4;
+	            var result, statusCode, errorMessage, liteCheck, mergedParams, sessionStatusType, status_2, errorMessage, _f, promoted, slug, token, responseID, deployment, hash, requested, domain, error_5;
 	            return __generator(this, function (_g) {
 	                switch (_g.label) {
 	                    case 0:
@@ -11207,9 +11220,9 @@
 	                        }
 	                        return [2 /*return*/, result];
 	                    case 3:
-	                        error_4 = _g.sent();
-	                        logger(this.options.debug, "error", "An error occurred during request validation: ".concat(error_4));
-	                        throw error_4;
+	                        error_5 = _g.sent();
+	                        logger(this.options.debug, "error", "An error occurred during request validation: ".concat(error_5));
+	                        throw error_5;
 	                    case 4: return [2 /*return*/];
 	                }
 	            });
@@ -11223,7 +11236,7 @@
 	    Gatekeeper.prototype.validateRequestHybridMode = function (customParams) {
 	        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p;
 	        return __awaiter(this, void 0, void 0, function () {
-	            var signatures, tokens, freshToken, freshSignature, result, statusCode, errorMessage, liteCheck, configStatusType, status_3, errorMessage, mergedParams, sessionStatusType, status_4, errorMessage, token, hash, error_5, validationResult, mergedParams, sessionStatusType, status_5, errorMessage, hash, token, error_6, _i, _q, item, _r, _s, item;
+	            var signatures, tokens, freshToken, freshSignature, result, statusCode, errorMessage, liteCheck, configStatusType, status_3, errorMessage, mergedParams, sessionStatusType, status_4, errorMessage, token, hash, error_6, validationResult, mergedParams, sessionStatusType, status_5, errorMessage, hash, token, error_7, _i, _q, item, _r, _s, item;
 	            var _this = this;
 	            return __generator(this, function (_t) {
 	                switch (_t.label) {
@@ -11418,8 +11431,8 @@
 	                        }
 	                        return [3 /*break*/, 5];
 	                    case 4:
-	                        error_5 = _t.sent();
-	                        logger(this.options.debug, "error", error_5);
+	                        error_6 = _t.sent();
+	                        logger(this.options.debug, "error", error_6);
 	                        return [3 /*break*/, 5];
 	                    case 5:
 	                        logger(this.options.debug, "info", "Signature and token found. Validating...");
@@ -11494,8 +11507,8 @@
 	                        }
 	                        return [3 /*break*/, 9];
 	                    case 8:
-	                        error_6 = _t.sent();
-	                        logger(this.options.debug, "error", error_6);
+	                        error_7 = _t.sent();
+	                        logger(this.options.debug, "error", error_7);
 	                        return [3 /*break*/, 9];
 	                    case 9:
 	                        //part 2 here

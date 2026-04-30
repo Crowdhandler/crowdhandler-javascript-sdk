@@ -58,6 +58,7 @@ var languageDiscover_1 = require("../common/languageDiscover");
 var userAgentDiscover_1 = require("../common/userAgentDiscover");
 var timer_1 = require("../common/timer");
 var ignoredPatternsCheck_1 = require("../common/ignoredPatternsCheck");
+var runtime_1 = require("../common/runtime");
 require("../common/types");
 var types_1 = require("../common/types");
 var hash_1 = require("../common/hash");
@@ -887,35 +888,42 @@ var Gatekeeper = /** @class */ (function () {
      */
     Gatekeeper.prototype.recordPerformance = function (options) {
         return __awaiter(this, void 0, void 0, function () {
-            var validatedOptions, statusCode, sample, overrideElapsed, responseID, lottery, currentResponseID, elapsed;
+            var validatedOptions, statusCode, sample, overrideElapsed, responseID, timeout, lottery, currentResponseID, elapsed, sampleRate, putPromise, error_3;
             return __generator(this, function (_a) {
-                try {
-                    validatedOptions = options
-                        ? types_1.RecordPerformanceOptions.parse(options)
-                        : {
-                            statusCode: 200,
-                            sample: 0.2,
-                            overrideElapsed: undefined,
-                            responseID: undefined, // no responseID
-                        };
-                    statusCode = validatedOptions.statusCode, sample = validatedOptions.sample, overrideElapsed = validatedOptions.overrideElapsed, responseID = validatedOptions.responseID;
-                    lottery = Math.random();
-                    currentResponseID = responseID || this.responseID;
-                    // If there's no responseID or if the random number is higher than the sample rate, return early
-                    if (!currentResponseID || lottery >= sample) {
-                        return [2 /*return*/];
-                    }
-                    elapsed = overrideElapsed !== undefined ? overrideElapsed : this.timer.elapsed();
-                    // Asynchronously send the performance data to CrowdHandler, no need to await the promise
-                    this.PublicClient.responses().put(currentResponseID, {
-                        httpCode: statusCode,
-                        time: elapsed,
-                    });
+                switch (_a.label) {
+                    case 0:
+                        _a.trys.push([0, 3, , 4]);
+                        validatedOptions = options
+                            ? types_1.RecordPerformanceOptions.parse(options)
+                            : {
+                                statusCode: 200,
+                                sample: 0.2,
+                                overrideElapsed: undefined,
+                                responseID: undefined,
+                                timeout: undefined, // no per-call timeout override
+                            };
+                        statusCode = validatedOptions.statusCode, sample = validatedOptions.sample, overrideElapsed = validatedOptions.overrideElapsed, responseID = validatedOptions.responseID, timeout = validatedOptions.timeout;
+                        lottery = Math.random();
+                        currentResponseID = responseID || this.responseID;
+                        // If there's no responseID or if the random number is higher than the sample rate, return early
+                        if (!currentResponseID || lottery >= sample) {
+                            return [2 /*return*/];
+                        }
+                        elapsed = overrideElapsed !== undefined ? overrideElapsed : this.timer.elapsed();
+                        sampleRate = Math.max(1, Math.round(1 / sample));
+                        putPromise = this.PublicClient.responses().put(currentResponseID, { httpCode: statusCode, sampleRate: sampleRate, time: elapsed }, { timeout: timeout !== null && timeout !== void 0 ? timeout : 1500 });
+                        if (!runtime_1.isCloudflareWorkers) return [3 /*break*/, 2];
+                        return [4 /*yield*/, putPromise];
+                    case 1:
+                        _a.sent();
+                        _a.label = 2;
+                    case 2: return [3 /*break*/, 4];
+                    case 3:
+                        error_3 = _a.sent();
+                        (0, logger_1.logger)(this.options.debug, "Error recording performance:", error_3);
+                        return [3 /*break*/, 4];
+                    case 4: return [2 /*return*/];
                 }
-                catch (error) {
-                    (0, logger_1.logger)(this.options.debug, "Error recording performance:", error);
-                }
-                return [2 /*return*/];
             });
         });
     };
@@ -1170,7 +1178,7 @@ var Gatekeeper = /** @class */ (function () {
     Gatekeeper.prototype.validateRequestClientSideMode = function (customParams) {
         var _a, _b, _c, _d, _e;
         return __awaiter(this, void 0, void 0, function () {
-            var result, statusCode, errorMessage, liteCheck, mergedParams, sessionStatusType, status_1, errorMessage, _f, promoted, slug, token, responseID, deployment, hash, requested, domain, error_3;
+            var result, statusCode, errorMessage, liteCheck, mergedParams, sessionStatusType, status_1, errorMessage, _f, promoted, slug, token, responseID, deployment, hash, requested, domain, error_4;
             return __generator(this, function (_g) {
                 switch (_g.label) {
                     case 0:
@@ -1311,9 +1319,9 @@ var Gatekeeper = /** @class */ (function () {
                         }
                         return [2 /*return*/, result];
                     case 3:
-                        error_3 = _g.sent();
-                        (0, logger_1.logger)(this.options.debug, "error", "An error occurred during request validation: ".concat(error_3));
-                        throw error_3;
+                        error_4 = _g.sent();
+                        (0, logger_1.logger)(this.options.debug, "error", "An error occurred during request validation: ".concat(error_4));
+                        throw error_4;
                     case 4: return [2 /*return*/];
                 }
             });
@@ -1328,7 +1336,7 @@ var Gatekeeper = /** @class */ (function () {
     Gatekeeper.prototype.validateRequestFullMode = function (customParams) {
         var _a, _b, _c, _d, _e;
         return __awaiter(this, void 0, void 0, function () {
-            var result, statusCode, errorMessage, liteCheck, mergedParams, sessionStatusType, status_2, errorMessage, _f, promoted, slug, token, responseID, deployment, hash, requested, domain, error_4;
+            var result, statusCode, errorMessage, liteCheck, mergedParams, sessionStatusType, status_2, errorMessage, _f, promoted, slug, token, responseID, deployment, hash, requested, domain, error_5;
             return __generator(this, function (_g) {
                 switch (_g.label) {
                     case 0:
@@ -1469,9 +1477,9 @@ var Gatekeeper = /** @class */ (function () {
                         }
                         return [2 /*return*/, result];
                     case 3:
-                        error_4 = _g.sent();
-                        (0, logger_1.logger)(this.options.debug, "error", "An error occurred during request validation: ".concat(error_4));
-                        throw error_4;
+                        error_5 = _g.sent();
+                        (0, logger_1.logger)(this.options.debug, "error", "An error occurred during request validation: ".concat(error_5));
+                        throw error_5;
                     case 4: return [2 /*return*/];
                 }
             });
@@ -1485,7 +1493,7 @@ var Gatekeeper = /** @class */ (function () {
     Gatekeeper.prototype.validateRequestHybridMode = function (customParams) {
         var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p;
         return __awaiter(this, void 0, void 0, function () {
-            var signatures, tokens, freshToken, freshSignature, processedCookie, result, statusCode, errorMessage, liteCheck, configStatusType, status_3, errorMessage, mergedParams, sessionStatusType, status_4, errorMessage, token, hash, requested, error_5, validationResult, mergedParams, sessionStatusType, status_5, errorMessage, hash, requested, token, error_6, _i, _q, item, _r, _s, item;
+            var signatures, tokens, freshToken, freshSignature, processedCookie, result, statusCode, errorMessage, liteCheck, configStatusType, status_3, errorMessage, mergedParams, sessionStatusType, status_4, errorMessage, token, hash, requested, error_6, validationResult, mergedParams, sessionStatusType, status_5, errorMessage, hash, requested, token, error_7, _i, _q, item, _r, _s, item;
             var _this = this;
             return __generator(this, function (_t) {
                 switch (_t.label) {
@@ -1681,8 +1689,8 @@ var Gatekeeper = /** @class */ (function () {
                         }
                         return [3 /*break*/, 5];
                     case 4:
-                        error_5 = _t.sent();
-                        (0, logger_1.logger)(this.options.debug, "error", error_5);
+                        error_6 = _t.sent();
+                        (0, logger_1.logger)(this.options.debug, "error", error_6);
                         return [3 /*break*/, 5];
                     case 5:
                         (0, logger_1.logger)(this.options.debug, "info", "Signature and token found. Validating...");
@@ -1758,8 +1766,8 @@ var Gatekeeper = /** @class */ (function () {
                         }
                         return [3 /*break*/, 9];
                     case 8:
-                        error_6 = _t.sent();
-                        (0, logger_1.logger)(this.options.debug, "error", error_6);
+                        error_7 = _t.sent();
+                        (0, logger_1.logger)(this.options.debug, "error", error_7);
                         return [3 /*break*/, 9];
                     case 9:
                         //part 2 here

@@ -2,20 +2,12 @@ import axios, { AxiosInstance } from "axios";
 import { z, ZodError } from "zod";
 import { logger } from "../common/logger";
 import { CrowdHandlerError, createError, ErrorCodes } from "../common/errors";
+import { isCloudflareWorkers } from "../common/runtime";
 
-/**
- * Detect if we're running in the Cloudflare Workers (workerd) runtime.
- * Workers sets navigator.userAgent to "Cloudflare-Workers" — this is the
- * documented and stable detection signal:
- * https://developers.cloudflare.com/workers/runtime-apis/web-standards/
- *
- * axios 0.27.2 has no fetch adapter and requires Node's http module, so it
- * crashes inside Workers. When we detect Workers, route HTTP through native
- * fetch instead — preserved error shape so errorHandler keeps working.
- */
-const isCloudflareWorkers =
-  typeof navigator !== "undefined" &&
-  (navigator as any).userAgent === "Cloudflare-Workers";
+// axios 0.27.2 has no fetch adapter and requires Node's http module, so it
+// crashes inside Workers. When isCloudflareWorkers is true we route HTTP
+// through native fetch instead — preserved error shape so errorHandler keeps
+// working.
 
 const APIResponse = z.object({}).catchall(z.any());
 
@@ -63,8 +55,10 @@ export class BaseClient {
       params?: Record<string, any>;
       body?: any;
       headers?: Record<string, string>;
+      timeout?: number;
     } = {}
   ): Promise<{ data: any; status: number; headers: any }> {
+    const requestTimeout = options.timeout ?? this.timeout;
     if (!isCloudflareWorkers) {
       // Node/Lambda path — preserve existing axios behaviour exactly.
       const response = await axios.request({
@@ -73,6 +67,7 @@ export class BaseClient {
         params: options.params,
         data: options.body,
         headers: options.headers,
+        timeout: requestTimeout,
       });
       return { data: response.data, status: response.status, headers: response.headers };
     }
@@ -102,7 +97,7 @@ export class BaseClient {
     }
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+    const timeoutId = setTimeout(() => controller.abort(), requestTimeout);
     init.signal = controller.signal;
 
     let response: Response;
@@ -326,13 +321,14 @@ export class BaseClient {
     }
   }
 
-  async httpPUT(path: string, body: object) {
+  async httpPUT(path: string, body: object, options?: { timeout?: number }) {
     try {
       const response = await this.httpRequest("PUT", this.apiUrl + path, {
         body,
         headers: {
           "x-api-key": this.key,
         },
+        timeout: options?.timeout,
       });
       return APIResponse.parse(response.data);
     } catch (error) {

@@ -55,18 +55,11 @@ var axios_1 = __importDefault(require("axios"));
 var zod_1 = require("zod");
 var logger_1 = require("../common/logger");
 var errors_1 = require("../common/errors");
-/**
- * Detect if we're running in the Cloudflare Workers (workerd) runtime.
- * Workers sets navigator.userAgent to "Cloudflare-Workers" — this is the
- * documented and stable detection signal:
- * https://developers.cloudflare.com/workers/runtime-apis/web-standards/
- *
- * axios 0.27.2 has no fetch adapter and requires Node's http module, so it
- * crashes inside Workers. When we detect Workers, route HTTP through native
- * fetch instead — preserved error shape so errorHandler keeps working.
- */
-var isCloudflareWorkers = typeof navigator !== "undefined" &&
-    navigator.userAgent === "Cloudflare-Workers";
+var runtime_1 = require("../common/runtime");
+// axios 0.27.2 has no fetch adapter and requires Node's http module, so it
+// crashes inside Workers. When isCloudflareWorkers is true we route HTTP
+// through native fetch instead — preserved error shape so errorHandler keeps
+// working.
 var APIResponse = zod_1.z.object({}).catchall(zod_1.z.any());
 var APIErrorResponse = zod_1.z
     .object({
@@ -82,7 +75,7 @@ var BaseClient = /** @class */ (function () {
         this.apiUrl = options.apiUrl || apiUrl;
         this.key = key;
         this.timeout = options.timeout || 5000;
-        if (!isCloudflareWorkers) {
+        if (!runtime_1.isCloudflareWorkers) {
             // axios.defaults is process-global state and is meaningless in Workers
             // (we don't use axios there). Skip in Workers to avoid touching axios's
             // internal config which can drag in Node-only deps during import.
@@ -96,29 +89,32 @@ var BaseClient = /** @class */ (function () {
      * downstream work unchanged.
      */
     BaseClient.prototype.httpRequest = function (method, url, options) {
+        var _a;
         if (options === void 0) { options = {}; }
         return __awaiter(this, void 0, void 0, function () {
-            var response_1, finalUrl, search, _i, _a, _b, k, v, init, hasContentType, controller, timeoutId, response, err_1, wrapped, contentType, data, _c, text, headersObj_1, wrapped, headersObj;
-            return __generator(this, function (_d) {
-                switch (_d.label) {
+            var requestTimeout, response_1, finalUrl, search, _i, _b, _c, k, v, init, hasContentType, controller, timeoutId, response, err_1, wrapped, contentType, data, _d, text, headersObj_1, wrapped, headersObj;
+            return __generator(this, function (_e) {
+                switch (_e.label) {
                     case 0:
-                        if (!!isCloudflareWorkers) return [3 /*break*/, 2];
+                        requestTimeout = (_a = options.timeout) !== null && _a !== void 0 ? _a : this.timeout;
+                        if (!!runtime_1.isCloudflareWorkers) return [3 /*break*/, 2];
                         return [4 /*yield*/, axios_1.default.request({
                                 method: method,
                                 url: url,
                                 params: options.params,
                                 data: options.body,
                                 headers: options.headers,
+                                timeout: requestTimeout,
                             })];
                     case 1:
-                        response_1 = _d.sent();
+                        response_1 = _e.sent();
                         return [2 /*return*/, { data: response_1.data, status: response_1.status, headers: response_1.headers }];
                     case 2:
                         finalUrl = url;
                         if (options.params && Object.keys(options.params).length > 0) {
                             search = new URLSearchParams();
-                            for (_i = 0, _a = Object.entries(options.params); _i < _a.length; _i++) {
-                                _b = _a[_i], k = _b[0], v = _b[1];
+                            for (_i = 0, _b = Object.entries(options.params); _i < _b.length; _i++) {
+                                _c = _b[_i], k = _c[0], v = _c[1];
                                 if (v !== undefined && v !== null)
                                     search.append(k, String(v));
                             }
@@ -137,17 +133,17 @@ var BaseClient = /** @class */ (function () {
                             }
                         }
                         controller = new AbortController();
-                        timeoutId = setTimeout(function () { return controller.abort(); }, this.timeout);
+                        timeoutId = setTimeout(function () { return controller.abort(); }, requestTimeout);
                         init.signal = controller.signal;
-                        _d.label = 3;
+                        _e.label = 3;
                     case 3:
-                        _d.trys.push([3, 5, , 6]);
+                        _e.trys.push([3, 5, , 6]);
                         return [4 /*yield*/, fetch(finalUrl, init)];
                     case 4:
-                        response = _d.sent();
+                        response = _e.sent();
                         return [3 /*break*/, 6];
                     case 5:
-                        err_1 = _d.sent();
+                        err_1 = _e.sent();
                         clearTimeout(timeoutId);
                         wrapped = new Error((err_1 === null || err_1 === void 0 ? void 0 : err_1.message) || "Network request failed");
                         wrapped.request = { url: finalUrl, method: method };
@@ -157,28 +153,28 @@ var BaseClient = /** @class */ (function () {
                         clearTimeout(timeoutId);
                         contentType = response.headers.get("content-type") || "";
                         if (!contentType.includes("application/json")) return [3 /*break*/, 11];
-                        _d.label = 7;
+                        _e.label = 7;
                     case 7:
-                        _d.trys.push([7, 9, , 10]);
+                        _e.trys.push([7, 9, , 10]);
                         return [4 /*yield*/, response.json()];
                     case 8:
-                        data = _d.sent();
+                        data = _e.sent();
                         return [3 /*break*/, 10];
                     case 9:
-                        _c = _d.sent();
+                        _d = _e.sent();
                         data = null;
                         return [3 /*break*/, 10];
                     case 10: return [3 /*break*/, 13];
                     case 11: return [4 /*yield*/, response.text()];
                     case 12:
-                        text = _d.sent();
+                        text = _e.sent();
                         try {
                             data = JSON.parse(text);
                         }
-                        catch (_e) {
+                        catch (_f) {
                             data = text;
                         }
-                        _d.label = 13;
+                        _e.label = 13;
                     case 13:
                         if (response.status < 200 || response.status >= 300) {
                             headersObj_1 = {};
@@ -381,7 +377,7 @@ var BaseClient = /** @class */ (function () {
             });
         });
     };
-    BaseClient.prototype.httpPUT = function (path, body) {
+    BaseClient.prototype.httpPUT = function (path, body, options) {
         return __awaiter(this, void 0, void 0, function () {
             var response, error_4;
             return __generator(this, function (_a) {
@@ -393,6 +389,7 @@ var BaseClient = /** @class */ (function () {
                                 headers: {
                                     "x-api-key": this.key,
                                 },
+                                timeout: options === null || options === void 0 ? void 0 : options.timeout,
                             })];
                     case 1:
                         response = _a.sent();

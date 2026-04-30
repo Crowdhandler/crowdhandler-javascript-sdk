@@ -296,8 +296,10 @@ await gatekeeper.recordPerformance();
 
 // With custom options
 await gatekeeper.recordPerformance({
-  sample: 0.2,  // Sample 20% of requests
-  factor: 100   // Custom timing factor
+  sample: 1,             // Record 100% of requests (default 0.2)
+  statusCode: 200,       // HTTP status code (default 200)
+  overrideElapsed: 1234, // Custom timing in ms
+  timeout: 1500          // Per-call API timeout in ms (default 1500)
 });
 ```
 
@@ -666,7 +668,7 @@ export default {
 **Workers vs. Express/Lambda — what's different:**
 
 - Workers have no mutable response object. Build the outgoing `Response` yourself using values from `result` (`cookieValue`, `targetURL`, `setCookie`) rather than relying on helper methods that mutate a response in place.
-- Use `ctx.waitUntil()` for `recordPerformance()` so the metric call doesn't delay the user's response.
+- Use `ctx.waitUntil()` for `recordPerformance()` so the metric call doesn't delay the user's response. On Workers the SDK awaits the underlying API call internally (so it actually flushes inside `ctx.waitUntil`); the put is capped at 1500ms by default — pass `{ timeout: <ms> }` to tune.
 - Default `mode: 'full'` (used above) only needs the public key. Hybrid mode is supported but requires shipping your private key as a Worker secret — only do this if you've assessed the trade-off.
 
 ### React / Next.js
@@ -739,7 +741,8 @@ await gatekeeper.recordPerformance();
 await gatekeeper.recordPerformance({
   sample: 1.0,           // Record 100% of requests (default 0.2)
   statusCode: 200,       // HTTP status code
-  overrideElapsed: 1234  // Custom timing in ms
+  overrideElapsed: 1234, // Custom timing in ms
+  timeout: 1500          // Per-call API timeout in ms (default 1500, overrides global SDK timeout)
 });
 ```
 

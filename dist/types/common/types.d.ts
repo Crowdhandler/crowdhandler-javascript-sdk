@@ -578,16 +578,19 @@ export declare const RecordPerformanceOptions: z.ZodObject<{
     sample: z.ZodDefault<z.ZodOptional<z.ZodNumber>>;
     overrideElapsed: z.ZodOptional<z.ZodNumber>;
     responseID: z.ZodOptional<z.ZodString>;
+    timeout: z.ZodOptional<z.ZodNumber>;
 }, "strip", z.ZodTypeAny, {
     statusCode: number;
     sample: number;
     overrideElapsed?: number | undefined;
     responseID?: string | undefined;
+    timeout?: number | undefined;
 }, {
     statusCode?: number | undefined;
     sample?: number | undefined;
     overrideElapsed?: number | undefined;
     responseID?: string | undefined;
+    timeout?: number | undefined;
 }>;
 export declare const Modes: {
     readonly FULL: "full";

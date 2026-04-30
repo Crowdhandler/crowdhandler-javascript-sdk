@@ -28,5 +28,7 @@ export declare class BaseClient {
     httpDELETE(path: string, body: object): Promise<z.objectOutputType<{}, z.ZodAny, "strip"> | undefined>;
     httpGET(path?: string, params?: object): Promise<z.objectOutputType<{}, z.ZodAny, "strip"> | undefined>;
     httpPOST(path: string, body?: Record<string, any>, headers?: Record<string, any>, schema?: z.Schema): Promise<any>;
-    httpPUT(path: string, body: object): Promise<z.objectOutputType<{}, z.ZodAny, "strip">>;
+    httpPUT(path: string, body: object, options?: {
+        timeout?: number;
+    }): Promise<z.objectOutputType<{}, z.ZodAny, "strip">>;
 }

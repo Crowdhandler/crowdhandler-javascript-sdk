@@ -180,6 +180,7 @@ exports.RecordPerformanceOptions = zod_1.z.object({
     sample: zod_1.z.number().optional().default(0.2),
     overrideElapsed: zod_1.z.number().optional(),
     responseID: zod_1.z.string().optional(),
+    timeout: zod_1.z.number().optional(),
 });
 // Mode constants
 exports.Modes = {
