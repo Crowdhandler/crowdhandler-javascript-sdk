@@ -962,14 +962,25 @@ export class Gatekeeper {
    * 
    * @param {string} value - The cookie value to set (from result.cookieValue)
    * @param {string} domain - Optional domain pattern to determine cookie domain scope
-   * @returns {boolean} True if the cookie was successfully set, false otherwise
+   * @returns {boolean | string} In Node.js/Lambda/browser environments returns true on success
+   *   or false on failure. In Cloudflare Workers returns the Set-Cookie header string that
+   *   must be applied to the outgoing Response by the caller.
    * 
    * @example
+   * // Node.js / Lambda
    * if (result.setCookie) {
    *   gatekeeper.setCookie(result.cookieValue, result.domain);
    * }
+   * 
+   * @example
+   * // Cloudflare Workers
+   * if (result.setCookie) {
+   *   const setCookieHeader = gatekeeper.setCookie(result.cookieValue, result.domain);
+   *   // setCookieHeader is the Set-Cookie header value — apply it to the Response:
+   *   // response.headers.append('Set-Cookie', setCookieHeader as string);
+   * }
    */
-  public setCookie(value: string, domain?: string): boolean {
+  public setCookie(value: string, domain?: string): boolean | string {
     try {
       // Determine cookie domain if domain pattern is provided
       let cookieDomain: string | undefined;
@@ -981,9 +992,12 @@ export class Gatekeeper {
         }
       }
       
-      // Set the cookie with the provided value and options
-      this.REQUEST.setCookie(value, this.STORAGE_NAME, cookieDomain);
-      return true;
+      // Set the cookie with the provided value and options.
+      // CloudflareWorkersHandler returns the Set-Cookie header string because
+      // Workers are response-out and the caller must apply the header manually.
+      // All other handlers set the cookie as a side-effect and return void.
+      const result = this.REQUEST.setCookie(value, this.STORAGE_NAME, cookieDomain);
+      return typeof result === 'string' ? result : true;
     } catch (error: any) {
       logger(this.options.debug, "error", error);
       return false;

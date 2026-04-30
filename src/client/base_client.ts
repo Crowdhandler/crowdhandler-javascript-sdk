@@ -108,6 +108,9 @@ export class BaseClient {
       // Mirror axios's "no response received" error shape so errorHandler's
       // `else if (error.request)` branch fires.
       const wrapped: any = new Error(err?.message || "Network request failed");
+      if (controller.signal.aborted || err?.name === "AbortError") {
+        wrapped.code = "ECONNABORTED";
+      }
       wrapped.request = { url: finalUrl, method };
       wrapped.config = { url: finalUrl, method };
       throw wrapped;
