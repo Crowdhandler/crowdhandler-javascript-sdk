@@ -1,5 +1,5 @@
 /**
- * CrowdHandler JavaScript SDK v2.4.0
+ * CrowdHandler JavaScript SDK v2.4.1
  * (c) 2026 CrowdHandler
  * @license ISC
  */
@@ -10521,14 +10521,15 @@
 	            logger(this.options.debug, "info", "Domain has trailing wildcard, cannot use root domain cookie");
 	            return { isWildcard: false };
 	        }
-	        // Extract root domain (last two parts for cookie domain)
-	        var parts = domainPart.split('.');
-	        var rootDomain = parts.length >= 2
-	            ? ".".concat(parts.slice(-2).join('.'))
-	            : ".".concat(domainPart);
+	        // Use the full domain captured after the wildcard. The integrator's
+	        // wildcard placement defines the cookie scope: e.g. *.barbican.org.uk
+	        // → .barbican.org.uk, *.example.com → .example.com. Avoid heuristics
+	        // like "last two labels", which mis-handle multi-label public suffixes
+	        // (.co.uk, .org.uk, .com.au) and would scope the cookie to a public
+	        // suffix the browser then rejects.
 	        return {
 	            isWildcard: true,
-	            rootDomain: rootDomain
+	            rootDomain: ".".concat(domainPart)
 	        };
 	    };
 	    /**
