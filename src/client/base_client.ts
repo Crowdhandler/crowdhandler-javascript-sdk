@@ -34,7 +34,7 @@ export class BaseClient {
     this.apiUrl = options.apiUrl || apiUrl;
     this.key = key;
     this.timeout = options.timeout || 5000;
-    if (!isCloudflareWorkers) {
+    if (!isCloudflareWorkers()) {
       // axios.defaults is process-global state and is meaningless in Workers
       // (we don't use axios there). Skip in Workers to avoid touching axios's
       // internal config which can drag in Node-only deps during import.
@@ -59,7 +59,7 @@ export class BaseClient {
     } = {}
   ): Promise<{ data: any; status: number; headers: any }> {
     const requestTimeout = options.timeout ?? this.timeout;
-    if (!isCloudflareWorkers) {
+    if (!isCloudflareWorkers()) {
       // Node/Lambda path — preserve existing axios behaviour exactly.
       const response = await axios.request({
         method,

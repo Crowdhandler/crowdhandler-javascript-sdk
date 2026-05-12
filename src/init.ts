@@ -4,6 +4,7 @@ import { RequestContext } from "./request/requestContext";
 import { Gatekeeper } from "./gatekeeper/gatekeeper";
 import { GatekeeperOptions, Mode, Modes } from "./common/types";
 import { CrowdHandlerError, createError, ErrorCodes } from "./common/errors";
+import { setCloudflareWorkersOverride } from "./common/runtime";
 
 /**
  * Configuration options for initializing CrowdHandler
@@ -78,6 +79,16 @@ export interface InitConfig {
       statusCode: number;
       message?: string;
     };
+
+    /**
+     * Force the SDK to treat the current runtime as Cloudflare Workers, skipping
+     * the navigator.userAgent inference. Only `true` is accepted; omit the option
+     * to fall back to auto-detection. Useful for environments where the navigator
+     * check could mis-fire (custom workerd builds, bundlers that strip globals,
+     * test harnesses) or where you simply want the transport decision to be
+     * explicit rather than inferred.
+     */
+    forceCloudflareWorkers?: true;
   };
 }
 
@@ -144,7 +155,15 @@ export type InitResult = InitResultWithoutGatekeeper | InitResultWithGatekeeper;
  *   privateKey: 'sk_xyz',
  *   lambdaEdgeEvent: event
  * });
- * 
+ *
+ * @example
+ * // Cloudflare Workers with explicit override (skips navigator inference)
+ * const { client, gatekeeper } = crowdhandler.init({
+ *   publicKey: 'pk_xyz',
+ *   cloudflareWorkersRequest: request,
+ *   options: { forceCloudflareWorkers: true }
+ * });
+ *
  * @throws {CrowdHandlerError} When configuration is invalid
  */
 // Function overloads for better type inference
@@ -163,7 +182,15 @@ export function init(config: InitConfig): InitResult {
       'Provide your public key from the CrowdHandler dashboard: crowdhandler.init({ publicKey: "YOUR_KEY" })'
     );
   }
-  
+
+  // Apply the Workers runtime override before constructing the Client, because
+  // BaseClient's constructor reads isCloudflareWorkers() to decide whether to
+  // touch axios.defaults. Only honoured when explicitly true — omission leaves
+  // the navigator-based inference in place.
+  if (config.options?.forceCloudflareWorkers === true) {
+    setCloudflareWorkersOverride(true);
+  }
+
   // Create unified client
   const client = new Client({
     publicKey: config.publicKey,

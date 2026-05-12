@@ -1134,7 +1134,7 @@ export class Gatekeeper {
       // delay the caller). On Workers, await — ctx.waitUntil(recordPerformance(...))
       // only extends the request lifetime until the awaited Promise chain
       // resolves, so without this the runtime cancels the orphaned fetch.
-      if (isCloudflareWorkers) {
+      if (isCloudflareWorkers()) {
         await putPromise;
       }
     } catch (error: any) {
