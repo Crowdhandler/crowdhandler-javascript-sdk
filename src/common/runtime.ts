@@ -21,6 +21,10 @@ export function setCloudflareWorkersOverride(value: boolean | null): void {
   cloudflareWorkersOverride = value;
 }
 
+export function getCloudflareWorkersOverride(): boolean | null {
+  return cloudflareWorkersOverride;
+}
+
 export function isCloudflareWorkers(): boolean {
   if (cloudflareWorkersOverride !== null) return cloudflareWorkersOverride;
   return detectCloudflareWorkers();

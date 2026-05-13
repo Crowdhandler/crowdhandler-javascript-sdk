@@ -4,7 +4,12 @@ import { RequestContext } from "./request/requestContext";
 import { Gatekeeper } from "./gatekeeper/gatekeeper";
 import { GatekeeperOptions, Mode, Modes } from "./common/types";
 import { CrowdHandlerError, createError, ErrorCodes } from "./common/errors";
-import { setCloudflareWorkersOverride } from "./common/runtime";
+import {
+  getCloudflareWorkersOverride,
+  isCloudflareWorkers,
+  setCloudflareWorkersOverride,
+} from "./common/runtime";
+import { logger } from "./common/logger";
 
 /**
  * Configuration options for initializing CrowdHandler
@@ -189,6 +194,18 @@ export function init(config: InitConfig): InitResult {
   // the navigator-based inference in place.
   if (config.options?.forceCloudflareWorkers === true) {
     setCloudflareWorkersOverride(true);
+  }
+
+  // When a Workers context is provided, surface which signal drove the runtime
+  // decision so debug logs can distinguish forced overrides from navigator
+  // inference. Only emitted in debug mode.
+  if (config.cloudflareWorkersRequest) {
+    const source = getCloudflareWorkersOverride() !== null ? "override" : "navigator inference";
+    logger(
+      !!config.options?.debug,
+      "info",
+      `[CH] Cloudflare Workers runtime: ${isCloudflareWorkers()} (via ${source})`
+    );
   }
 
   // Create unified client
