@@ -11629,11 +11629,11 @@
 	    }
 	    // Apply the Workers runtime override before constructing the Client, because
 	    // BaseClient's constructor reads isCloudflareWorkers() to decide whether to
-	    // touch axios.defaults. Only honoured when explicitly true — omission leaves
-	    // the navigator-based inference in place.
-	    if (((_a = config.options) === null || _a === void 0 ? void 0 : _a.forceCloudflareWorkers) === true) {
-	        setCloudflareWorkersOverride(true);
-	    }
+	    // touch axios.defaults. Unconditionally sync the module-level override so
+	    // repeated init() calls don't bleed state from prior invocations — omission
+	    // resets to null (navigator inference) rather than retaining a previously
+	    // forced value.
+	    setCloudflareWorkersOverride(((_a = config.options) === null || _a === void 0 ? void 0 : _a.forceCloudflareWorkers) === true ? true : null);
 	    // When a Workers context is provided, surface which signal drove the runtime
 	    // decision so debug logs can distinguish forced overrides from navigator
 	    // inference. Only emitted in debug mode.
