@@ -927,7 +927,7 @@ var Gatekeeper = /** @class */ (function () {
                         elapsed = overrideElapsed !== undefined ? overrideElapsed : this.timer.elapsed();
                         sampleRate = Math.max(1, Math.round(1 / sample));
                         putPromise = this.PublicClient.responses().put(currentResponseID, { httpCode: statusCode, sampleRate: sampleRate, time: elapsed }, { timeout: timeout !== null && timeout !== void 0 ? timeout : 1500 });
-                        if (!runtime_1.isCloudflareWorkers) return [3 /*break*/, 2];
+                        if (!(0, runtime_1.isCloudflareWorkers)()) return [3 /*break*/, 2];
                         return [4 /*yield*/, putPromise];
                     case 1:
                         _a.sent();

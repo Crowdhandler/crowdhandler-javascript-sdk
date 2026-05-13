@@ -1,7 +1,3 @@
-/**
- * Detect if we're running in the Cloudflare Workers (workerd) runtime.
- * Workers sets navigator.userAgent to "Cloudflare-Workers" — this is the
- * documented and stable detection signal:
- * https://developers.cloudflare.com/workers/runtime-apis/web-standards/
- */
-export declare const isCloudflareWorkers: boolean;
+export declare function setCloudflareWorkersOverride(value: boolean | null): void;
+export declare function getCloudflareWorkersOverride(): boolean | null;
+export declare function isCloudflareWorkers(): boolean;

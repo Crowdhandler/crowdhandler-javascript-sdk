@@ -16,12 +16,28 @@ var client_1 = require("./client/client");
 var requestContext_1 = require("./request/requestContext");
 var gatekeeper_1 = require("./gatekeeper/gatekeeper");
 var errors_1 = require("./common/errors");
+var runtime_1 = require("./common/runtime");
+var logger_1 = require("./common/logger");
 // Implementation
 function init(config) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
     // Validate configuration
     if (!config.publicKey) {
         throw new errors_1.CrowdHandlerError(errors_1.ErrorCodes.INVALID_CONFIG, 'publicKey is required', 'Provide your public key from the CrowdHandler dashboard: crowdhandler.init({ publicKey: "YOUR_KEY" })');
+    }
+    // Apply the Workers runtime override before constructing the Client, because
+    // BaseClient's constructor reads isCloudflareWorkers() to decide whether to
+    // touch axios.defaults. Unconditionally sync the module-level override so
+    // repeated init() calls don't bleed state from prior invocations — omission
+    // resets to null (navigator inference) rather than retaining a previously
+    // forced value.
+    (0, runtime_1.setCloudflareWorkersOverride)(((_a = config.options) === null || _a === void 0 ? void 0 : _a.forceCloudflareWorkers) === true ? true : null);
+    // When a Workers context is provided, surface which signal drove the runtime
+    // decision so debug logs can distinguish forced overrides from navigator
+    // inference. Only emitted in debug mode.
+    if (config.cloudflareWorkersRequest) {
+        var source = (0, runtime_1.getCloudflareWorkersOverride)() !== null ? "override" : "navigator inference";
+        (0, logger_1.logger)(!!((_b = config.options) === null || _b === void 0 ? void 0 : _b.debug), "info", "[CH] Cloudflare Workers runtime: ".concat((0, runtime_1.isCloudflareWorkers)(), " (via ").concat(source, ")"));
     }
     // Create unified client
     var client = new client_1.Client({
@@ -61,7 +77,7 @@ function init(config) {
         // Auto-detect mode
         var mode = detectMode(config);
         // Prepare gatekeeper options
-        var gatekeeperOptions = __assign(__assign({ mode: mode, debug: (_a = config.options) === null || _a === void 0 ? void 0 : _a.debug, timeout: (_b = config.options) === null || _b === void 0 ? void 0 : _b.timeout }, (((_c = config.options) === null || _c === void 0 ? void 0 : _c.trustOnFail) !== undefined && { trustOnFail: config.options.trustOnFail })), { fallbackSlug: (_d = config.options) === null || _d === void 0 ? void 0 : _d.fallbackSlug, cookieName: (_e = config.options) === null || _e === void 0 ? void 0 : _e.cookieName, liteValidator: (_f = config.options) === null || _f === void 0 ? void 0 : _f.liteValidator, roomsConfig: (_g = config.options) === null || _g === void 0 ? void 0 : _g.roomsConfig, waitingRoom: (_h = config.options) === null || _h === void 0 ? void 0 : _h.waitingRoom, testError: (_j = config.options) === null || _j === void 0 ? void 0 : _j.testError });
+        var gatekeeperOptions = __assign(__assign({ mode: mode, debug: (_c = config.options) === null || _c === void 0 ? void 0 : _c.debug, timeout: (_d = config.options) === null || _d === void 0 ? void 0 : _d.timeout }, (((_e = config.options) === null || _e === void 0 ? void 0 : _e.trustOnFail) !== undefined && { trustOnFail: config.options.trustOnFail })), { fallbackSlug: (_f = config.options) === null || _f === void 0 ? void 0 : _f.fallbackSlug, cookieName: (_g = config.options) === null || _g === void 0 ? void 0 : _g.cookieName, liteValidator: (_h = config.options) === null || _h === void 0 ? void 0 : _h.liteValidator, roomsConfig: (_j = config.options) === null || _j === void 0 ? void 0 : _j.roomsConfig, waitingRoom: (_k = config.options) === null || _k === void 0 ? void 0 : _k.waitingRoom, testError: (_l = config.options) === null || _l === void 0 ? void 0 : _l.testError });
         // Create gatekeeper using the public client from our unified client
         gatekeeper = new gatekeeper_1.Gatekeeper(client.getPublicClient(), context, {
             publicKey: config.publicKey,
