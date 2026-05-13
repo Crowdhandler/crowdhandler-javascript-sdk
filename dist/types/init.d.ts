@@ -57,6 +57,15 @@ export interface InitConfig {
             statusCode: number;
             message?: string;
         };
+        /**
+         * Force the SDK to treat the current runtime as Cloudflare Workers, skipping
+         * the navigator.userAgent inference. Only `true` is accepted; omit the option
+         * to fall back to auto-detection. Useful for environments where the navigator
+         * check could mis-fire (custom workerd builds, bundlers that strip globals,
+         * test harnesses) or where you simply want the transport decision to be
+         * explicit rather than inferred.
+         */
+        forceCloudflareWorkers?: true;
     };
 }
 /**
@@ -116,6 +125,14 @@ export declare type InitResult = InitResultWithoutGatekeeper | InitResultWithGat
  *   publicKey: 'pk_xyz',
  *   privateKey: 'sk_xyz',
  *   lambdaEdgeEvent: event
+ * });
+ *
+ * @example
+ * // Cloudflare Workers with explicit override (skips navigator inference)
+ * const { client, gatekeeper } = crowdhandler.init({
+ *   publicKey: 'pk_xyz',
+ *   cloudflareWorkersRequest: request,
+ *   options: { forceCloudflareWorkers: true }
  * });
  *
  * @throws {CrowdHandlerError} When configuration is invalid

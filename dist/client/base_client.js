@@ -75,7 +75,7 @@ var BaseClient = /** @class */ (function () {
         this.apiUrl = options.apiUrl || apiUrl;
         this.key = key;
         this.timeout = options.timeout || 5000;
-        if (!runtime_1.isCloudflareWorkers) {
+        if (!(0, runtime_1.isCloudflareWorkers)()) {
             // axios.defaults is process-global state and is meaningless in Workers
             // (we don't use axios there). Skip in Workers to avoid touching axios's
             // internal config which can drag in Node-only deps during import.
@@ -97,7 +97,7 @@ var BaseClient = /** @class */ (function () {
                 switch (_e.label) {
                     case 0:
                         requestTimeout = (_a = options.timeout) !== null && _a !== void 0 ? _a : this.timeout;
-                        if (!!runtime_1.isCloudflareWorkers) return [3 /*break*/, 2];
+                        if (!!(0, runtime_1.isCloudflareWorkers)()) return [3 /*break*/, 2];
                         return [4 /*yield*/, axios_1.default.request({
                                 method: method,
                                 url: url,
