@@ -340,6 +340,11 @@ const instance = crowdhandler.init({
     trustOnFail: true,    // Allow access if API fails
     fallbackSlug: '',     // Fallback room slug when trustOnFail is false
     cookieName: 'crowdhandler',  // Custom cookie name (default: 'crowdhandler')
+    cookieMaxAgeSeconds: 86400,  // Optional. Persist the cookie via Max-Age (seconds).
+                                 // Omit for a session cookie (default).
+    forceCloudflareWorkers: true,  // Optional. Bypass navigator-based runtime inference
+                                   // and treat the runtime as Cloudflare Workers. Only `true`
+                                   // is accepted; omit for auto-detection.
     waitingRoom: false,   // Set to true if SDK is running in a waiting room context
     liteValidator: false, // Enable lite validator mode (default: false)
     roomsConfig: [{       // Array of room configurations for lite validator
@@ -399,6 +404,40 @@ This is useful when:
 - Running multiple CrowdHandler instances on the same domain
 - Avoiding conflicts with existing cookies
 - Meeting specific naming conventions
+
+## Cookie Persistence
+
+By default the CrowdHandler cookie is a **session cookie** — the browser drops it when the user fully quits (note: many browsers restore session cookies if "continue where you left off" is enabled). For waiting-room use cases where you want a queued user's position to survive a browser restart, opt in to persistence with `cookieMaxAgeSeconds`:
+
+```javascript
+const { gatekeeper } = crowdhandler.init({
+  publicKey: 'YOUR_PUBLIC_KEY',
+  options: {
+    cookieMaxAgeSeconds: 86400  // Persist for 24 hours via Max-Age
+  }
+});
+```
+
+Notes:
+- The value is written as the cookie's `Max-Age` attribute (preferred over `Expires` because it isn't affected by client clock skew).
+- The option applies to every Set-Cookie the SDK emits — both while the user is queued and after promotion.
+- Omit the option (or leave it `undefined`) to keep the original session-cookie behaviour.
+
+## Forcing the Cloudflare Workers Runtime
+
+The SDK infers a Cloudflare Workers runtime from `navigator.userAgent`. If that signal is unreliable in your environment (custom workerd builds, bundlers that strip globals, test harnesses) you can make the decision explicit:
+
+```javascript
+const { gatekeeper } = crowdhandler.init({
+  publicKey: env.CROWDHANDLER_PUBLIC_KEY,
+  cloudflareWorkersRequest: request,
+  options: {
+    forceCloudflareWorkers: true
+  }
+});
+```
+
+Only `true` is accepted — omit the option to fall back to auto-detection. With `debug: true`, the SDK logs which signal drove the decision, e.g. `[CH] Cloudflare Workers runtime: true (via override)` vs `(via navigator inference)`. The override is reset on every `init()` call so it never leaks across re-initialisations.
 
 ## API Client
 
