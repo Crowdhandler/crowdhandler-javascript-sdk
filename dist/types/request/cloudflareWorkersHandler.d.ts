@@ -23,6 +23,6 @@ export declare class CloudflareWorkersHandler {
     getPath(): string;
     getAbsoluteUri(): string;
     getUserHostAddress(): string;
-    setCookie(value: string, cookieName?: string, domain?: string): string;
+    setCookie(value: string, cookieName?: string, domain?: string, maxAgeSeconds?: number): string;
     redirect(url: string): Response;
 }

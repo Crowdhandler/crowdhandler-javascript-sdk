@@ -50,6 +50,7 @@ export declare const GatekeeperOptions: z.ZodObject<{
     timeout: z.ZodOptional<z.ZodNumber>;
     trustOnFail: z.ZodOptional<z.ZodBoolean>;
     cookieName: z.ZodOptional<z.ZodString>;
+    cookieMaxAgeSeconds: z.ZodOptional<z.ZodNumber>;
     liteValidator: z.ZodOptional<z.ZodBoolean>;
     roomsConfig: z.ZodOptional<z.ZodArray<z.ZodObject<{
         domain: z.ZodString;
@@ -91,6 +92,7 @@ export declare const GatekeeperOptions: z.ZodObject<{
     timeout?: number | undefined;
     trustOnFail?: boolean | undefined;
     cookieName?: string | undefined;
+    cookieMaxAgeSeconds?: number | undefined;
     liteValidator?: boolean | undefined;
     roomsConfig?: {
         domain: string;
@@ -112,6 +114,7 @@ export declare const GatekeeperOptions: z.ZodObject<{
     timeout?: number | undefined;
     trustOnFail?: boolean | undefined;
     cookieName?: string | undefined;
+    cookieMaxAgeSeconds?: number | undefined;
     liteValidator?: boolean | undefined;
     roomsConfig?: {
         domain: string;

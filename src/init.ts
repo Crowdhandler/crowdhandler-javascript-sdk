@@ -62,6 +62,13 @@ export interface InitConfig {
     
     /** Custom cookie name (default: 'crowdhandler') */
     cookieName?: string;
+
+    /**
+     * Persist the CrowdHandler cookie for this many seconds via Max-Age.
+     * Omit (default) to write a session cookie that the browser drops on
+     * close. Set e.g. 86400 to keep the queue token across browser restarts.
+     */
+    cookieMaxAgeSeconds?: number;
     
     /** Enable lite validator mode */
     liteValidator?: boolean;
@@ -263,6 +270,7 @@ export function init(config: InitConfig): InitResult {
       ...(config.options?.trustOnFail !== undefined && { trustOnFail: config.options.trustOnFail }),
       fallbackSlug: config.options?.fallbackSlug,
       cookieName: config.options?.cookieName,
+      cookieMaxAgeSeconds: config.options?.cookieMaxAgeSeconds,
       liteValidator: config.options?.liteValidator,
       roomsConfig: config.options?.roomsConfig,
       waitingRoom: config.options?.waitingRoom,

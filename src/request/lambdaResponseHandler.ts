@@ -40,17 +40,23 @@ export class LambdaResponseHandler {
 
   
 
-  public setCookie(value: z.infer<typeof CookieObject>, cookieName: string = "crowdhandler", domain?: string) {
+  public setCookie(value: z.infer<typeof CookieObject>, cookieName: string = "crowdhandler", domain?: string, maxAgeSeconds?: number) {
     const cookieOptions: any = {
       path: "/",
       secure: true, // cookie will only be sent over HTTPS
     };
-    
+
     // Add domain if provided
     if (domain) {
       cookieOptions.domain = domain;
     }
-    
+
+    // Opt-in persistence — when maxAgeSeconds is omitted, the cookie is a
+    // session cookie.
+    if (maxAgeSeconds) {
+      cookieOptions["Max-Age"] = maxAgeSeconds;
+    }
+
     // Append cookie to response header
     const cookieHeader = `${cookieName}=${value}; ${Object.keys(cookieOptions)
       .map((key) => `${key}=${cookieOptions[key]}`)

@@ -20,6 +20,7 @@ exports.GatekeeperOptions = zod_1.z.object({
     timeout: zod_1.z.number().optional(),
     trustOnFail: zod_1.z.boolean().optional(),
     cookieName: zod_1.z.string().optional(),
+    cookieMaxAgeSeconds: zod_1.z.number().int().positive().optional(),
     liteValidator: zod_1.z.boolean().optional(),
     roomsConfig: exports.RoomsConfig.optional(),
     waitingRoom: zod_1.z.boolean().optional(),

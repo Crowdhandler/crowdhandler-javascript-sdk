@@ -24,7 +24,7 @@ var BrowserHandler = /** @class */ (function () {
     BrowserHandler.prototype.getAbsoluteUri = function () {
         return window.location.href;
     };
-    BrowserHandler.prototype.setCookie = function (value, cookieName, domain) {
+    BrowserHandler.prototype.setCookie = function (value, cookieName, domain, maxAgeSeconds) {
         if (cookieName === void 0) { cookieName = "crowdhandler"; }
         var cookieOptions = {
             path: "/",
@@ -33,6 +33,12 @@ var BrowserHandler = /** @class */ (function () {
         // Add domain if provided
         if (domain) {
             cookieOptions.domain = domain;
+        }
+        // Opt-in persistence — when maxAgeSeconds is omitted, the cookie is a
+        // session cookie (browsers drop it when closed). Max-Age is preferred
+        // over Expires because it's not affected by client clock skew.
+        if (maxAgeSeconds) {
+            cookieOptions["Max-Age"] = maxAgeSeconds;
         }
         document.cookie = "".concat(cookieName, "=").concat(value, "; ").concat(Object.keys(cookieOptions)
             .map(function (key) { return "".concat(key, "=").concat(cookieOptions[key]); })

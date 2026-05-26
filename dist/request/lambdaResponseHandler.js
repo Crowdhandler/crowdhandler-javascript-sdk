@@ -24,7 +24,7 @@ var LambdaResponseHandler = /** @class */ (function () {
     LambdaResponseHandler.prototype.getPath = function () {
         return this.request.uri;
     };
-    LambdaResponseHandler.prototype.setCookie = function (value, cookieName, domain) {
+    LambdaResponseHandler.prototype.setCookie = function (value, cookieName, domain, maxAgeSeconds) {
         if (cookieName === void 0) { cookieName = "crowdhandler"; }
         var cookieOptions = {
             path: "/",
@@ -33,6 +33,11 @@ var LambdaResponseHandler = /** @class */ (function () {
         // Add domain if provided
         if (domain) {
             cookieOptions.domain = domain;
+        }
+        // Opt-in persistence — when maxAgeSeconds is omitted, the cookie is a
+        // session cookie.
+        if (maxAgeSeconds) {
+            cookieOptions["Max-Age"] = maxAgeSeconds;
         }
         // Append cookie to response header
         var cookieHeader = "".concat(cookieName, "=").concat(value, "; ").concat(Object.keys(cookieOptions)

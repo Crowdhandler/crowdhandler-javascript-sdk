@@ -25,17 +25,24 @@ export class BrowserHandler {
     return window.location.href;
   }
 
-  public setCookie(value: string, cookieName: string = "crowdhandler", domain?: string) {
+  public setCookie(value: string, cookieName: string = "crowdhandler", domain?: string, maxAgeSeconds?: number) {
     const cookieOptions: any = {
       path: "/",
       secure: true, // cookie will only be sent over HTTPS
     };
-    
+
     // Add domain if provided
     if (domain) {
       cookieOptions.domain = domain;
     }
-    
+
+    // Opt-in persistence — when maxAgeSeconds is omitted, the cookie is a
+    // session cookie (browsers drop it when closed). Max-Age is preferred
+    // over Expires because it's not affected by client clock skew.
+    if (maxAgeSeconds) {
+      cookieOptions["Max-Age"] = maxAgeSeconds;
+    }
+
     document.cookie = `${cookieName}=${value}; ${Object.keys(cookieOptions)
       .map((key) => `${key}=${cookieOptions[key]}`)
       .join("; ")}`;

@@ -58,13 +58,18 @@ export class CloudflareWorkersHandler {
   public setCookie(
     value: string,
     cookieName: string = "crowdhandler",
-    domain?: string
+    domain?: string,
+    maxAgeSeconds?: number
   ): string {
     // Returns the Set-Cookie header value — caller appends it to their
     // outgoing Response. Format mirrors the existing CF integration.
+    // When maxAgeSeconds is omitted, the cookie is a session cookie.
     const parts = [`${cookieName}=${value}`, "path=/", "Secure"];
     if (domain) {
       parts.push(`domain=${domain}`);
+    }
+    if (maxAgeSeconds) {
+      parts.push(`Max-Age=${maxAgeSeconds}`);
     }
     return parts.join("; ");
   }

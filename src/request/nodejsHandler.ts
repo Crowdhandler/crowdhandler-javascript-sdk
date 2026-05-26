@@ -50,17 +50,23 @@ export class NodeJSHandler {
       return this.request.ip;
     }
   
-    public setCookie(value: z.infer<typeof CookieObject>, cookieName: string = "crowdhandler", domain?: string) {
+    public setCookie(value: z.infer<typeof CookieObject>, cookieName: string = "crowdhandler", domain?: string, maxAgeSeconds?: number) {
       const cookieOptions: any = {
         path: "/",
         secure: true, // cookie will only be sent over HTTPS
       };
-      
+
       // Add domain if provided
       if (domain) {
         cookieOptions.domain = domain;
       }
-      
+
+      // Opt-in persistence — when maxAgeSeconds is omitted, the cookie is a
+      // session cookie.
+      if (maxAgeSeconds) {
+        cookieOptions["Max-Age"] = maxAgeSeconds;
+      }
+
       //Append cookie to response header
       return this.response.setHeader(
         "Set-Cookie",

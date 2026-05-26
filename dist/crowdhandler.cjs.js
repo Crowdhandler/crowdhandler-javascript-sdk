@@ -1832,7 +1832,7 @@ var BrowserHandler = /** @class */ (function () {
     BrowserHandler.prototype.getAbsoluteUri = function () {
         return window.location.href;
     };
-    BrowserHandler.prototype.setCookie = function (value, cookieName, domain) {
+    BrowserHandler.prototype.setCookie = function (value, cookieName, domain, maxAgeSeconds) {
         if (cookieName === void 0) { cookieName = "crowdhandler"; }
         var cookieOptions = {
             path: "/",
@@ -1841,6 +1841,12 @@ var BrowserHandler = /** @class */ (function () {
         // Add domain if provided
         if (domain) {
             cookieOptions.domain = domain;
+        }
+        // Opt-in persistence — when maxAgeSeconds is omitted, the cookie is a
+        // session cookie (browsers drop it when closed). Max-Age is preferred
+        // over Expires because it's not affected by client clock skew.
+        if (maxAgeSeconds) {
+            cookieOptions["Max-Age"] = maxAgeSeconds;
         }
         document.cookie = "".concat(cookieName, "=").concat(value, "; ").concat(Object.keys(cookieOptions)
             .map(function (key) { return "".concat(key, "=").concat(cookieOptions[key]); })
@@ -1904,13 +1910,17 @@ var CloudflareWorkersHandler = /** @class */ (function () {
         // (matches crowdhandler-cloudflare-integration/index.js).
         return this.request.headers.get("cf-connecting-ip") || "";
     };
-    CloudflareWorkersHandler.prototype.setCookie = function (value, cookieName, domain) {
+    CloudflareWorkersHandler.prototype.setCookie = function (value, cookieName, domain, maxAgeSeconds) {
         if (cookieName === void 0) { cookieName = "crowdhandler"; }
         // Returns the Set-Cookie header value — caller appends it to their
         // outgoing Response. Format mirrors the existing CF integration.
+        // When maxAgeSeconds is omitted, the cookie is a session cookie.
         var parts = ["".concat(cookieName, "=").concat(value), "path=/", "Secure"];
         if (domain) {
             parts.push("domain=".concat(domain));
+        }
+        if (maxAgeSeconds) {
+            parts.push("Max-Age=".concat(maxAgeSeconds));
         }
         return parts.join("; ");
     };
@@ -2046,7 +2056,7 @@ var LambdaResponseHandler = /** @class */ (function () {
     LambdaResponseHandler.prototype.getPath = function () {
         return this.request.uri;
     };
-    LambdaResponseHandler.prototype.setCookie = function (value, cookieName, domain) {
+    LambdaResponseHandler.prototype.setCookie = function (value, cookieName, domain, maxAgeSeconds) {
         if (cookieName === void 0) { cookieName = "crowdhandler"; }
         var cookieOptions = {
             path: "/",
@@ -2055,6 +2065,11 @@ var LambdaResponseHandler = /** @class */ (function () {
         // Add domain if provided
         if (domain) {
             cookieOptions.domain = domain;
+        }
+        // Opt-in persistence — when maxAgeSeconds is omitted, the cookie is a
+        // session cookie.
+        if (maxAgeSeconds) {
+            cookieOptions["Max-Age"] = maxAgeSeconds;
         }
         // Append cookie to response header
         var cookieHeader = "".concat(cookieName, "=").concat(value, "; ").concat(Object.keys(cookieOptions)
@@ -2102,7 +2117,7 @@ var NodeJSHandler = /** @class */ (function () {
     NodeJSHandler.prototype.getUserHostAddress = function () {
         return this.request.ip;
     };
-    NodeJSHandler.prototype.setCookie = function (value, cookieName, domain) {
+    NodeJSHandler.prototype.setCookie = function (value, cookieName, domain, maxAgeSeconds) {
         if (cookieName === void 0) { cookieName = "crowdhandler"; }
         var cookieOptions = {
             path: "/",
@@ -2111,6 +2126,11 @@ var NodeJSHandler = /** @class */ (function () {
         // Add domain if provided
         if (domain) {
             cookieOptions.domain = domain;
+        }
+        // Opt-in persistence — when maxAgeSeconds is omitted, the cookie is a
+        // session cookie.
+        if (maxAgeSeconds) {
+            cookieOptions["Max-Age"] = maxAgeSeconds;
         }
         //Append cookie to response header
         return this.response.setHeader("Set-Cookie", "".concat(cookieName, "=").concat(value, "; ").concat(Object.keys(cookieOptions)
@@ -2189,6 +2209,7 @@ zod.z.object({
     timeout: zod.z.number().optional(),
     trustOnFail: zod.z.boolean().optional(),
     cookieName: zod.z.string().optional(),
+    cookieMaxAgeSeconds: zod.z.number().int().positive().optional(),
     liteValidator: zod.z.boolean().optional(),
     roomsConfig: RoomsConfig.optional(),
     waitingRoom: zod.z.boolean().optional(),
@@ -3565,7 +3586,9 @@ var Gatekeeper = /** @class */ (function () {
             // CloudflareWorkersHandler returns the Set-Cookie header string because
             // Workers are response-out and the caller must apply the header manually.
             // All other handlers set the cookie as a side-effect and return void.
-            var result = this.REQUEST.setCookie(value, this.STORAGE_NAME, cookieDomain);
+            // cookieMaxAgeSeconds is opt-in — when undefined the cookie is written
+            // as a session cookie (the SDK's original behaviour).
+            var result = this.REQUEST.setCookie(value, this.STORAGE_NAME, cookieDomain, this.options.cookieMaxAgeSeconds);
             return typeof result === 'string' ? result : true;
         }
         catch (error) {
@@ -4598,7 +4621,7 @@ var Gatekeeper = /** @class */ (function () {
 
 // Implementation
 function init(config) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m;
     // Validate configuration
     if (!config.publicKey) {
         throw new CrowdHandlerError(ErrorCodes.INVALID_CONFIG, 'publicKey is required', 'Provide your public key from the CrowdHandler dashboard: crowdhandler.init({ publicKey: "YOUR_KEY" })');
@@ -4655,7 +4678,7 @@ function init(config) {
         // Auto-detect mode
         var mode = detectMode(config);
         // Prepare gatekeeper options
-        var gatekeeperOptions = __assign(__assign({ mode: mode, debug: (_c = config.options) === null || _c === void 0 ? void 0 : _c.debug, timeout: (_d = config.options) === null || _d === void 0 ? void 0 : _d.timeout }, (((_e = config.options) === null || _e === void 0 ? void 0 : _e.trustOnFail) !== undefined && { trustOnFail: config.options.trustOnFail })), { fallbackSlug: (_f = config.options) === null || _f === void 0 ? void 0 : _f.fallbackSlug, cookieName: (_g = config.options) === null || _g === void 0 ? void 0 : _g.cookieName, liteValidator: (_h = config.options) === null || _h === void 0 ? void 0 : _h.liteValidator, roomsConfig: (_j = config.options) === null || _j === void 0 ? void 0 : _j.roomsConfig, waitingRoom: (_k = config.options) === null || _k === void 0 ? void 0 : _k.waitingRoom, testError: (_l = config.options) === null || _l === void 0 ? void 0 : _l.testError });
+        var gatekeeperOptions = __assign(__assign({ mode: mode, debug: (_c = config.options) === null || _c === void 0 ? void 0 : _c.debug, timeout: (_d = config.options) === null || _d === void 0 ? void 0 : _d.timeout }, (((_e = config.options) === null || _e === void 0 ? void 0 : _e.trustOnFail) !== undefined && { trustOnFail: config.options.trustOnFail })), { fallbackSlug: (_f = config.options) === null || _f === void 0 ? void 0 : _f.fallbackSlug, cookieName: (_g = config.options) === null || _g === void 0 ? void 0 : _g.cookieName, cookieMaxAgeSeconds: (_h = config.options) === null || _h === void 0 ? void 0 : _h.cookieMaxAgeSeconds, liteValidator: (_j = config.options) === null || _j === void 0 ? void 0 : _j.liteValidator, roomsConfig: (_k = config.options) === null || _k === void 0 ? void 0 : _k.roomsConfig, waitingRoom: (_l = config.options) === null || _l === void 0 ? void 0 : _l.waitingRoom, testError: (_m = config.options) === null || _m === void 0 ? void 0 : _m.testError });
         // Create gatekeeper using the public client from our unified client
         gatekeeper = new Gatekeeper(client.getPublicClient(), context, {
             publicKey: config.publicKey,

@@ -47,13 +47,17 @@ var CloudflareWorkersHandler = /** @class */ (function () {
         // (matches crowdhandler-cloudflare-integration/index.js).
         return this.request.headers.get("cf-connecting-ip") || "";
     };
-    CloudflareWorkersHandler.prototype.setCookie = function (value, cookieName, domain) {
+    CloudflareWorkersHandler.prototype.setCookie = function (value, cookieName, domain, maxAgeSeconds) {
         if (cookieName === void 0) { cookieName = "crowdhandler"; }
         // Returns the Set-Cookie header value — caller appends it to their
         // outgoing Response. Format mirrors the existing CF integration.
+        // When maxAgeSeconds is omitted, the cookie is a session cookie.
         var parts = ["".concat(cookieName, "=").concat(value), "path=/", "Secure"];
         if (domain) {
             parts.push("domain=".concat(domain));
+        }
+        if (maxAgeSeconds) {
+            parts.push("Max-Age=".concat(maxAgeSeconds));
         }
         return parts.join("; ");
     };
