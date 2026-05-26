@@ -20,6 +20,7 @@ export const GatekeeperOptions = z.object({
   timeout: z.number().optional(),
   trustOnFail: z.boolean().optional(),
   cookieName: z.string().optional(),
+  cookieMaxAgeSeconds: z.number().int().positive().optional(),
   liteValidator: z.boolean().optional(),
   roomsConfig: RoomsConfig.optional(), // Array of room configs
   waitingRoom: z.boolean().optional(),
