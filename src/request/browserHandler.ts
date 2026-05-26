@@ -37,10 +37,10 @@ export class BrowserHandler {
     }
 
     // Opt-in persistence — when maxAgeSeconds is omitted, the cookie is a
-    // session cookie (browsers drop it when closed). max-age is preferred
-    // over expires because it's not affected by client clock skew.
+    // session cookie (browsers drop it when closed). Max-Age is preferred
+    // over Expires because it's not affected by client clock skew.
     if (maxAgeSeconds) {
-      cookieOptions["max-age"] = maxAgeSeconds;
+      cookieOptions["Max-Age"] = maxAgeSeconds;
     }
 
     document.cookie = `${cookieName}=${value}; ${Object.keys(cookieOptions)

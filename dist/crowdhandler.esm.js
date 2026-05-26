@@ -1835,10 +1835,10 @@ var BrowserHandler = /** @class */ (function () {
             cookieOptions.domain = domain;
         }
         // Opt-in persistence — when maxAgeSeconds is omitted, the cookie is a
-        // session cookie (browsers drop it when closed). max-age is preferred
-        // over expires because it's not affected by client clock skew.
+        // session cookie (browsers drop it when closed). Max-Age is preferred
+        // over Expires because it's not affected by client clock skew.
         if (maxAgeSeconds) {
-            cookieOptions["max-age"] = maxAgeSeconds;
+            cookieOptions["Max-Age"] = maxAgeSeconds;
         }
         document.cookie = "".concat(cookieName, "=").concat(value, "; ").concat(Object.keys(cookieOptions)
             .map(function (key) { return "".concat(key, "=").concat(cookieOptions[key]); })
