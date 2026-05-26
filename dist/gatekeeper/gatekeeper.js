@@ -824,7 +824,9 @@ var Gatekeeper = /** @class */ (function () {
             // CloudflareWorkersHandler returns the Set-Cookie header string because
             // Workers are response-out and the caller must apply the header manually.
             // All other handlers set the cookie as a side-effect and return void.
-            var result = this.REQUEST.setCookie(value, this.STORAGE_NAME, cookieDomain);
+            // cookieMaxAgeSeconds is opt-in — when undefined the cookie is written
+            // as a session cookie (the SDK's original behaviour).
+            var result = this.REQUEST.setCookie(value, this.STORAGE_NAME, cookieDomain, this.options.cookieMaxAgeSeconds);
             return typeof result === 'string' ? result : true;
         }
         catch (error) {

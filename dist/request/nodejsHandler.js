@@ -35,7 +35,7 @@ var NodeJSHandler = /** @class */ (function () {
     NodeJSHandler.prototype.getUserHostAddress = function () {
         return this.request.ip;
     };
-    NodeJSHandler.prototype.setCookie = function (value, cookieName, domain) {
+    NodeJSHandler.prototype.setCookie = function (value, cookieName, domain, maxAgeSeconds) {
         if (cookieName === void 0) { cookieName = "crowdhandler"; }
         var cookieOptions = {
             path: "/",
@@ -44,6 +44,11 @@ var NodeJSHandler = /** @class */ (function () {
         // Add domain if provided
         if (domain) {
             cookieOptions.domain = domain;
+        }
+        // Opt-in persistence — when maxAgeSeconds is omitted, the cookie is a
+        // session cookie.
+        if (maxAgeSeconds) {
+            cookieOptions["Max-Age"] = maxAgeSeconds;
         }
         //Append cookie to response header
         return this.response.setHeader("Set-Cookie", "".concat(cookieName, "=").concat(value, "; ").concat(Object.keys(cookieOptions)

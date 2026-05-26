@@ -20,7 +20,7 @@ var runtime_1 = require("./common/runtime");
 var logger_1 = require("./common/logger");
 // Implementation
 function init(config) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m;
     // Validate configuration
     if (!config.publicKey) {
         throw new errors_1.CrowdHandlerError(errors_1.ErrorCodes.INVALID_CONFIG, 'publicKey is required', 'Provide your public key from the CrowdHandler dashboard: crowdhandler.init({ publicKey: "YOUR_KEY" })');
@@ -77,7 +77,7 @@ function init(config) {
         // Auto-detect mode
         var mode = detectMode(config);
         // Prepare gatekeeper options
-        var gatekeeperOptions = __assign(__assign({ mode: mode, debug: (_c = config.options) === null || _c === void 0 ? void 0 : _c.debug, timeout: (_d = config.options) === null || _d === void 0 ? void 0 : _d.timeout }, (((_e = config.options) === null || _e === void 0 ? void 0 : _e.trustOnFail) !== undefined && { trustOnFail: config.options.trustOnFail })), { fallbackSlug: (_f = config.options) === null || _f === void 0 ? void 0 : _f.fallbackSlug, cookieName: (_g = config.options) === null || _g === void 0 ? void 0 : _g.cookieName, liteValidator: (_h = config.options) === null || _h === void 0 ? void 0 : _h.liteValidator, roomsConfig: (_j = config.options) === null || _j === void 0 ? void 0 : _j.roomsConfig, waitingRoom: (_k = config.options) === null || _k === void 0 ? void 0 : _k.waitingRoom, testError: (_l = config.options) === null || _l === void 0 ? void 0 : _l.testError });
+        var gatekeeperOptions = __assign(__assign({ mode: mode, debug: (_c = config.options) === null || _c === void 0 ? void 0 : _c.debug, timeout: (_d = config.options) === null || _d === void 0 ? void 0 : _d.timeout }, (((_e = config.options) === null || _e === void 0 ? void 0 : _e.trustOnFail) !== undefined && { trustOnFail: config.options.trustOnFail })), { fallbackSlug: (_f = config.options) === null || _f === void 0 ? void 0 : _f.fallbackSlug, cookieName: (_g = config.options) === null || _g === void 0 ? void 0 : _g.cookieName, cookieMaxAgeSeconds: (_h = config.options) === null || _h === void 0 ? void 0 : _h.cookieMaxAgeSeconds, liteValidator: (_j = config.options) === null || _j === void 0 ? void 0 : _j.liteValidator, roomsConfig: (_k = config.options) === null || _k === void 0 ? void 0 : _k.roomsConfig, waitingRoom: (_l = config.options) === null || _l === void 0 ? void 0 : _l.waitingRoom, testError: (_m = config.options) === null || _m === void 0 ? void 0 : _m.testError });
         // Create gatekeeper using the public client from our unified client
         gatekeeper = new gatekeeper_1.Gatekeeper(client.getPublicClient(), context, {
             publicKey: config.publicKey,
