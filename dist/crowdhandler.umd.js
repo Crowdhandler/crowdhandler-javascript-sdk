@@ -1,5 +1,5 @@
 /**
- * CrowdHandler JavaScript SDK v2.4.4
+ * CrowdHandler JavaScript SDK v2.5.0
  * (c) 2026 CrowdHandler
  * @license ISC
  */
