@@ -1382,8 +1382,8 @@ export class Gatekeeper {
    * if (result.error) {
    *   console.error(`API Error ${result.error.statusCode}: ${result.error.message}`);
    *   // Note: promoted is still set based on error type
-   *   // 4xx errors: promoted = false
-   *   // 5xx errors: promoted based on trustOnFail setting
+   *   // 4xx errors (excluding 429): promoted = false
+   *   // 429 throttle and 5xx errors: promoted based on trustOnFail setting
    * }
    * 
    * @throws {CrowdHandlerError} When SDK configuration fails or network errors occur
@@ -1444,7 +1444,7 @@ export class Gatekeeper {
       const errorMessage = this.options.testError.message || `Simulated error with status ${statusCode}`;
       
       // Apply same logic as real errors
-      if (statusCode >= 400 && statusCode < 500) {
+      if (statusCode >= 400 && statusCode < 500 && statusCode !== 429) {
         result.promoted = false;
         if (this.options.fallbackSlug) {
           result.slug = this.options.fallbackSlug;
@@ -1519,14 +1519,14 @@ export class Gatekeeper {
           const errorMessage = this.sessionStatus?.result?.error || `API request failed with status ${status}`;
           
           // Determine promoted based on error type
-          if (status && status >= 400 && status < 500) {
-            // Client errors (4xx) - never promote
+          if (status && status >= 400 && status < 500 && status !== 429) {
+            // Client errors (4xx, excluding 429) - never promote
             result.promoted = false;
             if (this.options.fallbackSlug) {
               result.slug = this.options.fallbackSlug;
             }
           } else {
-            // Server errors (5xx) or other errors - respect trustOnFail
+            // Server errors (5xx), 429 throttle, or other errors - respect trustOnFail
             result.promoted = this.options.trustOnFail;
             if (!this.options.trustOnFail && this.options.fallbackSlug) {
               result.slug = this.options.fallbackSlug;
@@ -1542,6 +1542,19 @@ export class Gatekeeper {
 
           return result;
         }
+      }
+
+      // Throttle response (status 6) - treated as a server error, respect trustOnFail
+      if (this.sessionStatus?.result?.status === 6) {
+        result.promoted = this.options.trustOnFail;
+        if (!this.options.trustOnFail && this.options.fallbackSlug) {
+          result.slug = this.options.fallbackSlug;
+        }
+        result.error = {
+          message: 'API throttle response (status 6)',
+          code: 'RATE_LIMITED'
+        };
+        return result;
       }
 
       // Processing based on promotion status
@@ -1624,7 +1637,7 @@ export class Gatekeeper {
       const errorMessage = this.options.testError.message || `Simulated error with status ${statusCode}`;
       
       // Apply same logic as real errors
-      if (statusCode >= 400 && statusCode < 500) {
+      if (statusCode >= 400 && statusCode < 500 && statusCode !== 429) {
         result.promoted = false;
         if (this.options.fallbackSlug) {
           result.slug = this.options.fallbackSlug;
@@ -1699,14 +1712,14 @@ export class Gatekeeper {
           const errorMessage = this.sessionStatus?.result?.error || `API request failed with status ${status}`;
           
           // Determine promoted based on error type
-          if (status && status >= 400 && status < 500) {
-            // Client errors (4xx) - never promote
+          if (status && status >= 400 && status < 500 && status !== 429) {
+            // Client errors (4xx, excluding 429) - never promote
             result.promoted = false;
             if (this.options.fallbackSlug) {
               result.slug = this.options.fallbackSlug;
             }
           } else {
-            // Server errors (5xx) or other errors - respect trustOnFail
+            // Server errors (5xx), 429 throttle, or other errors - respect trustOnFail
             result.promoted = this.options.trustOnFail;
             if (!this.options.trustOnFail && this.options.fallbackSlug) {
               result.slug = this.options.fallbackSlug;
@@ -1722,6 +1735,19 @@ export class Gatekeeper {
 
           return result;
         }
+      }
+
+      // Throttle response (status 6) - treated as a server error, respect trustOnFail
+      if (this.sessionStatus?.result?.status === 6) {
+        result.promoted = this.options.trustOnFail;
+        if (!this.options.trustOnFail && this.options.fallbackSlug) {
+          result.slug = this.options.fallbackSlug;
+        }
+        result.error = {
+          message: 'API throttle response (status 6)',
+          code: 'RATE_LIMITED'
+        };
+        return result;
       }
 
       // Processing based on promotion status
@@ -1806,7 +1832,7 @@ export class Gatekeeper {
       const errorMessage = this.options.testError.message || `Simulated error with status ${statusCode}`;
       
       // Apply same logic as real errors
-      if (statusCode >= 400 && statusCode < 500) {
+      if (statusCode >= 400 && statusCode < 500 && statusCode !== 429) {
         result.promoted = false;
         if (this.options.fallbackSlug) {
           result.slug = this.options.fallbackSlug;
@@ -1953,14 +1979,14 @@ export class Gatekeeper {
             const errorMessage = this.sessionStatus?.result?.error || `API request failed with status ${status}`;
             
             // Determine promoted based on error type
-            if (status && status >= 400 && status < 500) {
-              // Client errors (4xx) - never promote
+            if (status && status >= 400 && status < 500 && status !== 429) {
+              // Client errors (4xx, excluding 429) - never promote
               result.promoted = false;
               if (this.options.fallbackSlug) {
                 result.slug = this.options.fallbackSlug;
               }
             } else {
-              // Server errors (5xx) or other errors - respect trustOnFail
+              // Server errors (5xx), 429 throttle, or other errors - respect trustOnFail
               result.promoted = this.options.trustOnFail;
               if (!this.options.trustOnFail && this.options.fallbackSlug) {
                 result.slug = this.options.fallbackSlug;
@@ -1980,6 +2006,19 @@ export class Gatekeeper {
 
         let token: string;
         
+        // Throttle response (status 6) - treated as a server error, respect trustOnFail
+        if (this.sessionStatus && this.sessionStatus.result.status === 6) {
+          result.promoted = this.options.trustOnFail;
+          if (!this.options.trustOnFail && this.options.fallbackSlug) {
+            result.slug = this.options.fallbackSlug;
+          }
+          result.error = {
+            message: 'API throttle response (status 6)',
+            code: 'RATE_LIMITED'
+          };
+          return result;
+        }
+
         // Pass domain from API response if available
         if (this.sessionStatus && this.sessionStatus.result.domain) {
           result.domain = this.sessionStatus.result.domain;
@@ -2065,14 +2104,14 @@ export class Gatekeeper {
             const errorMessage = this.sessionStatus?.result?.error || `API request failed with status ${status}`;
             
             // Determine promoted based on error type
-            if (status && status >= 400 && status < 500) {
-              // Client errors (4xx) - never promote
+            if (status && status >= 400 && status < 500 && status !== 429) {
+              // Client errors (4xx, excluding 429) - never promote
               result.promoted = false;
               if (this.options.fallbackSlug) {
                 result.slug = this.options.fallbackSlug;
               }
             } else {
-              // Server errors (5xx) or other errors - respect trustOnFail
+              // Server errors (5xx), 429 throttle, or other errors - respect trustOnFail
               result.promoted = this.options.trustOnFail;
               if (!this.options.trustOnFail && this.options.fallbackSlug) {
                 result.slug = this.options.fallbackSlug;
@@ -2088,6 +2127,19 @@ export class Gatekeeper {
 
             return result;
           }
+        }
+
+        // Throttle response (status 6) - treated as a server error, respect trustOnFail
+        if (this.sessionStatus && this.sessionStatus.result.status === 6) {
+          result.promoted = this.options.trustOnFail;
+          if (!this.options.trustOnFail && this.options.fallbackSlug) {
+            result.slug = this.options.fallbackSlug;
+          }
+          result.error = {
+            message: 'API throttle response (status 6)',
+            code: 'RATE_LIMITED'
+          };
+          return result;
         }
 
         // Pass domain from API response if available

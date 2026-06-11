@@ -341,8 +341,8 @@ export declare class Gatekeeper {
      * if (result.error) {
      *   console.error(`API Error ${result.error.statusCode}: ${result.error.message}`);
      *   // Note: promoted is still set based on error type
-     *   // 4xx errors: promoted = false
-     *   // 5xx errors: promoted based on trustOnFail setting
+     *   // 4xx errors (excluding 429): promoted = false
+     *   // 429 throttle and 5xx errors: promoted based on trustOnFail setting
      * }
      *
      * @throws {CrowdHandlerError} When SDK configuration fails or network errors occur
