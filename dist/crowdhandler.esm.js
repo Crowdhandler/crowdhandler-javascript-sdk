@@ -1,5 +1,5 @@
 /**
- * CrowdHandler JavaScript SDK v2.4.2
+ * CrowdHandler JavaScript SDK v2.4.4
  * (c) 2026 CrowdHandler
  * @license ISC
  */
@@ -3904,8 +3904,8 @@ var Gatekeeper = /** @class */ (function () {
      * if (result.error) {
      *   console.error(`API Error ${result.error.statusCode}: ${result.error.message}`);
      *   // Note: promoted is still set based on error type
-     *   // 4xx errors: promoted = false
-     *   // 5xx errors: promoted based on trustOnFail setting
+     *   // 4xx errors (excluding 429): promoted = false
+     *   // 429 throttle and 5xx errors: promoted based on trustOnFail setting
      * }
      *
      * @throws {CrowdHandlerError} When SDK configuration fails or network errors occur
@@ -3946,11 +3946,11 @@ var Gatekeeper = /** @class */ (function () {
      * @return {Promise<z.infer<typeof validateRequestObject>>} Result of the validation process.
      */
     Gatekeeper.prototype.validateRequestClientSideMode = function (customParams) {
-        var _a, _b, _c, _d, _e;
+        var _a, _b, _c, _d, _e, _f, _g;
         return __awaiter(this, void 0, void 0, function () {
-            var result, statusCode, errorMessage, liteCheck, mergedParams, sessionStatusType, status_1, errorMessage, _f, promoted, slug, token, responseID, deployment, hash, requested, domain, error_4;
-            return __generator(this, function (_g) {
-                switch (_g.label) {
+            var result, statusCode, errorMessage, liteCheck, mergedParams, sessionStatusType, status_1, errorMessage, _h, promoted, slug, token, responseID, deployment, hash, requested, domain, error_4;
+            return __generator(this, function (_j) {
+                switch (_j.label) {
                     case 0:
                         // Process URL early to ensure targetURL is set for all scenarios (errors, redirects, etc.)
                         this.processURL();
@@ -3974,7 +3974,7 @@ var Gatekeeper = /** @class */ (function () {
                             statusCode = this.options.testError.statusCode;
                             errorMessage = this.options.testError.message || "Simulated error with status ".concat(statusCode);
                             // Apply same logic as real errors
-                            if (statusCode >= 400 && statusCode < 500) {
+                            if (statusCode >= 400 && statusCode < 500 && statusCode !== 429) {
                                 result.promoted = false;
                                 if (this.options.fallbackSlug) {
                                     result.slug = this.options.fallbackSlug;
@@ -3993,9 +3993,9 @@ var Gatekeeper = /** @class */ (function () {
                             };
                             return [2 /*return*/, result];
                         }
-                        _g.label = 1;
+                        _j.label = 1;
                     case 1:
-                        _g.trys.push([1, 3, , 4]);
+                        _j.trys.push([1, 3, , 4]);
                         // Log details for debugging
                         logger(this.options.debug, "info", "IP: ".concat(this.ip));
                         logger(this.options.debug, "info", "Agent: ".concat(this.agent));
@@ -4029,7 +4029,7 @@ var Gatekeeper = /** @class */ (function () {
                         mergedParams = __assign(__assign({}, customParams), (this.specialParameters.chCode && { code: this.specialParameters.chCode }));
                         return [4 /*yield*/, this.getSessionStatus(mergedParams)];
                     case 2:
-                        _g.sent();
+                        _j.sent();
                         sessionStatusType = HttpErrorWrapper.safeParse(this.sessionStatus);
                         // Handle session status errors
                         if (sessionStatusType.success) {
@@ -4037,15 +4037,15 @@ var Gatekeeper = /** @class */ (function () {
                                 status_1 = ((_c = (_b = this.sessionStatus) === null || _b === void 0 ? void 0 : _b.result) === null || _c === void 0 ? void 0 : _c.status) || 0;
                                 errorMessage = ((_e = (_d = this.sessionStatus) === null || _d === void 0 ? void 0 : _d.result) === null || _e === void 0 ? void 0 : _e.error) || "API request failed with status ".concat(status_1);
                                 // Determine promoted based on error type
-                                if (status_1 && status_1 >= 400 && status_1 < 500) {
-                                    // Client errors (4xx) - never promote
+                                if (status_1 && status_1 >= 400 && status_1 < 500 && status_1 !== 429) {
+                                    // Client errors (4xx, excluding 429) - never promote
                                     result.promoted = false;
                                     if (this.options.fallbackSlug) {
                                         result.slug = this.options.fallbackSlug;
                                     }
                                 }
                                 else {
-                                    // Server errors (5xx) or other errors - respect trustOnFail
+                                    // Server errors (5xx), 429 throttle, or other errors - respect trustOnFail
                                     result.promoted = this.options.trustOnFail;
                                     if (!this.options.trustOnFail && this.options.fallbackSlug) {
                                         result.slug = this.options.fallbackSlug;
@@ -4060,9 +4060,21 @@ var Gatekeeper = /** @class */ (function () {
                                 return [2 /*return*/, result];
                             }
                         }
+                        // Throttle response (status 6) - treated as a server error, respect trustOnFail
+                        if (((_g = (_f = this.sessionStatus) === null || _f === void 0 ? void 0 : _f.result) === null || _g === void 0 ? void 0 : _g.status) === 6) {
+                            result.promoted = this.options.trustOnFail;
+                            if (!this.options.trustOnFail && this.options.fallbackSlug) {
+                                result.slug = this.options.fallbackSlug;
+                            }
+                            result.error = {
+                                message: 'API throttle response (status 6)',
+                                code: 'RATE_LIMITED'
+                            };
+                            return [2 /*return*/, result];
+                        }
                         // Processing based on promotion status
                         if (this.sessionStatus) {
-                            _f = this.sessionStatus.result, promoted = _f.promoted, slug = _f.slug, token = _f.token, responseID = _f.responseID, deployment = _f.deployment, hash = _f.hash, requested = _f.requested, domain = _f.domain;
+                            _h = this.sessionStatus.result, promoted = _h.promoted, slug = _h.slug, token = _h.token, responseID = _h.responseID, deployment = _h.deployment, hash = _h.hash, requested = _h.requested, domain = _h.domain;
                             result.promoted = promoted === 1;
                             // Pass domain from API response if available
                             if (domain) {
@@ -4089,7 +4101,7 @@ var Gatekeeper = /** @class */ (function () {
                         }
                         return [2 /*return*/, result];
                     case 3:
-                        error_4 = _g.sent();
+                        error_4 = _j.sent();
                         logger(this.options.debug, "error", "An error occurred during request validation: ".concat(error_4));
                         throw error_4;
                     case 4: return [2 /*return*/];
@@ -4104,11 +4116,11 @@ var Gatekeeper = /** @class */ (function () {
      * @return {Promise<z.infer<typeof ValidateRequestObject>>} - The resulting status after validating the request.
      */
     Gatekeeper.prototype.validateRequestFullMode = function (customParams) {
-        var _a, _b, _c, _d, _e;
+        var _a, _b, _c, _d, _e, _f, _g;
         return __awaiter(this, void 0, void 0, function () {
-            var result, statusCode, errorMessage, liteCheck, mergedParams, sessionStatusType, status_2, errorMessage, _f, promoted, slug, token, responseID, deployment, hash, requested, domain, error_5;
-            return __generator(this, function (_g) {
-                switch (_g.label) {
+            var result, statusCode, errorMessage, liteCheck, mergedParams, sessionStatusType, status_2, errorMessage, _h, promoted, slug, token, responseID, deployment, hash, requested, domain, error_5;
+            return __generator(this, function (_j) {
+                switch (_j.label) {
                     case 0:
                         // Process URL early to ensure targetURL is set for all scenarios (errors, redirects, etc.)
                         this.processURL();
@@ -4132,7 +4144,7 @@ var Gatekeeper = /** @class */ (function () {
                             statusCode = this.options.testError.statusCode;
                             errorMessage = this.options.testError.message || "Simulated error with status ".concat(statusCode);
                             // Apply same logic as real errors
-                            if (statusCode >= 400 && statusCode < 500) {
+                            if (statusCode >= 400 && statusCode < 500 && statusCode !== 429) {
                                 result.promoted = false;
                                 if (this.options.fallbackSlug) {
                                     result.slug = this.options.fallbackSlug;
@@ -4151,9 +4163,9 @@ var Gatekeeper = /** @class */ (function () {
                             };
                             return [2 /*return*/, result];
                         }
-                        _g.label = 1;
+                        _j.label = 1;
                     case 1:
-                        _g.trys.push([1, 3, , 4]);
+                        _j.trys.push([1, 3, , 4]);
                         // Log details for debugging
                         logger(this.options.debug, "info", "IP: ".concat(this.ip));
                         logger(this.options.debug, "info", "Agent: ".concat(this.agent));
@@ -4187,7 +4199,7 @@ var Gatekeeper = /** @class */ (function () {
                         mergedParams = __assign(__assign({}, customParams), (this.specialParameters.chCode && { code: this.specialParameters.chCode }));
                         return [4 /*yield*/, this.getSessionStatus(mergedParams)];
                     case 2:
-                        _g.sent();
+                        _j.sent();
                         sessionStatusType = HttpErrorWrapper.safeParse(this.sessionStatus);
                         // Handle session status errors
                         if (sessionStatusType.success) {
@@ -4195,15 +4207,15 @@ var Gatekeeper = /** @class */ (function () {
                                 status_2 = ((_c = (_b = this.sessionStatus) === null || _b === void 0 ? void 0 : _b.result) === null || _c === void 0 ? void 0 : _c.status) || 0;
                                 errorMessage = ((_e = (_d = this.sessionStatus) === null || _d === void 0 ? void 0 : _d.result) === null || _e === void 0 ? void 0 : _e.error) || "API request failed with status ".concat(status_2);
                                 // Determine promoted based on error type
-                                if (status_2 && status_2 >= 400 && status_2 < 500) {
-                                    // Client errors (4xx) - never promote
+                                if (status_2 && status_2 >= 400 && status_2 < 500 && status_2 !== 429) {
+                                    // Client errors (4xx, excluding 429) - never promote
                                     result.promoted = false;
                                     if (this.options.fallbackSlug) {
                                         result.slug = this.options.fallbackSlug;
                                     }
                                 }
                                 else {
-                                    // Server errors (5xx) or other errors - respect trustOnFail
+                                    // Server errors (5xx), 429 throttle, or other errors - respect trustOnFail
                                     result.promoted = this.options.trustOnFail;
                                     if (!this.options.trustOnFail && this.options.fallbackSlug) {
                                         result.slug = this.options.fallbackSlug;
@@ -4218,9 +4230,21 @@ var Gatekeeper = /** @class */ (function () {
                                 return [2 /*return*/, result];
                             }
                         }
+                        // Throttle response (status 6) - treated as a server error, respect trustOnFail
+                        if (((_g = (_f = this.sessionStatus) === null || _f === void 0 ? void 0 : _f.result) === null || _g === void 0 ? void 0 : _g.status) === 6) {
+                            result.promoted = this.options.trustOnFail;
+                            if (!this.options.trustOnFail && this.options.fallbackSlug) {
+                                result.slug = this.options.fallbackSlug;
+                            }
+                            result.error = {
+                                message: 'API throttle response (status 6)',
+                                code: 'RATE_LIMITED'
+                            };
+                            return [2 /*return*/, result];
+                        }
                         // Processing based on promotion status
                         if (this.sessionStatus) {
-                            _f = this.sessionStatus.result, promoted = _f.promoted, slug = _f.slug, token = _f.token, responseID = _f.responseID, deployment = _f.deployment, hash = _f.hash, requested = _f.requested, domain = _f.domain;
+                            _h = this.sessionStatus.result, promoted = _h.promoted, slug = _h.slug, token = _h.token, responseID = _h.responseID, deployment = _h.deployment, hash = _h.hash, requested = _h.requested, domain = _h.domain;
                             result.promoted = promoted === 1;
                             // Pass domain from API response if available
                             if (domain) {
@@ -4247,7 +4271,7 @@ var Gatekeeper = /** @class */ (function () {
                         }
                         return [2 /*return*/, result];
                     case 3:
-                        error_5 = _g.sent();
+                        error_5 = _j.sent();
                         logger(this.options.debug, "error", "An error occurred during request validation: ".concat(error_5));
                         throw error_5;
                     case 4: return [2 /*return*/];
@@ -4292,7 +4316,7 @@ var Gatekeeper = /** @class */ (function () {
                             statusCode = this.options.testError.statusCode;
                             errorMessage = this.options.testError.message || "Simulated error with status ".concat(statusCode);
                             // Apply same logic as real errors
-                            if (statusCode >= 400 && statusCode < 500) {
+                            if (statusCode >= 400 && statusCode < 500 && statusCode !== 429) {
                                 result.promoted = false;
                                 if (this.options.fallbackSlug) {
                                     result.slug = this.options.fallbackSlug;
@@ -4396,15 +4420,15 @@ var Gatekeeper = /** @class */ (function () {
                                 status_4 = ((_f = (_e = this.sessionStatus) === null || _e === void 0 ? void 0 : _e.result) === null || _f === void 0 ? void 0 : _f.status) || 0;
                                 errorMessage = ((_h = (_g = this.sessionStatus) === null || _g === void 0 ? void 0 : _g.result) === null || _h === void 0 ? void 0 : _h.error) || "API request failed with status ".concat(status_4);
                                 // Determine promoted based on error type
-                                if (status_4 && status_4 >= 400 && status_4 < 500) {
-                                    // Client errors (4xx) - never promote
+                                if (status_4 && status_4 >= 400 && status_4 < 500 && status_4 !== 429) {
+                                    // Client errors (4xx, excluding 429) - never promote
                                     result.promoted = false;
                                     if (this.options.fallbackSlug) {
                                         result.slug = this.options.fallbackSlug;
                                     }
                                 }
                                 else {
-                                    // Server errors (5xx) or other errors - respect trustOnFail
+                                    // Server errors (5xx), 429 throttle, or other errors - respect trustOnFail
                                     result.promoted = this.options.trustOnFail;
                                     if (!this.options.trustOnFail && this.options.fallbackSlug) {
                                         result.slug = this.options.fallbackSlug;
@@ -4420,6 +4444,18 @@ var Gatekeeper = /** @class */ (function () {
                             }
                         }
                         token = void 0;
+                        // Throttle response (status 6) - treated as a server error, respect trustOnFail
+                        if (this.sessionStatus && this.sessionStatus.result.status === 6) {
+                            result.promoted = this.options.trustOnFail;
+                            if (!this.options.trustOnFail && this.options.fallbackSlug) {
+                                result.slug = this.options.fallbackSlug;
+                            }
+                            result.error = {
+                                message: 'API throttle response (status 6)',
+                                code: 'RATE_LIMITED'
+                            };
+                            return [2 /*return*/, result];
+                        }
                         // Pass domain from API response if available
                         if (this.sessionStatus && this.sessionStatus.result.domain) {
                             result.domain = this.sessionStatus.result.domain;
@@ -4479,15 +4515,15 @@ var Gatekeeper = /** @class */ (function () {
                                 status_5 = ((_k = (_j = this.sessionStatus) === null || _j === void 0 ? void 0 : _j.result) === null || _k === void 0 ? void 0 : _k.status) || 0;
                                 errorMessage = ((_m = (_l = this.sessionStatus) === null || _l === void 0 ? void 0 : _l.result) === null || _m === void 0 ? void 0 : _m.error) || "API request failed with status ".concat(status_5);
                                 // Determine promoted based on error type
-                                if (status_5 && status_5 >= 400 && status_5 < 500) {
-                                    // Client errors (4xx) - never promote
+                                if (status_5 && status_5 >= 400 && status_5 < 500 && status_5 !== 429) {
+                                    // Client errors (4xx, excluding 429) - never promote
                                     result.promoted = false;
                                     if (this.options.fallbackSlug) {
                                         result.slug = this.options.fallbackSlug;
                                     }
                                 }
                                 else {
-                                    // Server errors (5xx) or other errors - respect trustOnFail
+                                    // Server errors (5xx), 429 throttle, or other errors - respect trustOnFail
                                     result.promoted = this.options.trustOnFail;
                                     if (!this.options.trustOnFail && this.options.fallbackSlug) {
                                         result.slug = this.options.fallbackSlug;
@@ -4501,6 +4537,18 @@ var Gatekeeper = /** @class */ (function () {
                                 };
                                 return [2 /*return*/, result];
                             }
+                        }
+                        // Throttle response (status 6) - treated as a server error, respect trustOnFail
+                        if (this.sessionStatus && this.sessionStatus.result.status === 6) {
+                            result.promoted = this.options.trustOnFail;
+                            if (!this.options.trustOnFail && this.options.fallbackSlug) {
+                                result.slug = this.options.fallbackSlug;
+                            }
+                            result.error = {
+                                message: 'API throttle response (status 6)',
+                                code: 'RATE_LIMITED'
+                            };
+                            return [2 /*return*/, result];
                         }
                         // Pass domain from API response if available
                         if (this.sessionStatus && this.sessionStatus.result.domain) {
